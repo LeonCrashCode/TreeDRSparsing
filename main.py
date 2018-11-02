@@ -59,13 +59,13 @@ def run_train(args):
 	actn_v.toidx("TIME_NUMBER")
 	actn_v.toidx(")")
 
-	print actn_v.size()
+	#print actn_v.size()
 	actn_v.read_file(args.action_dict_path)
-	print actn_v.size()
+	#print actn_v.size()
 	actn_v.freeze()
 	#instances
 	train_input = read_input(args.train_input)
-	print train_input[0]
+	#print train_input[0]
 	train_comb = [ get_same_lemma(x[1]) for x in train_input]
 	dev_input = read_input(args.dev_input)
 	dev_comb = [ get_same_lemma(x[1]) for x in dev_input]
@@ -128,9 +128,6 @@ def run_train(args):
 				continue
 			lines.append(line)
 
-
-
-	mask = None
 	#mask = Mask(args, actn_v, starts, ends)
 	decoder = dec(actn_v.size(), args, actn_v)
 
