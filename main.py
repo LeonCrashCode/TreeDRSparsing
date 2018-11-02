@@ -221,6 +221,8 @@ def run_train(args):
 		model_optimizer.step()
 		
 		if check_iter % args.eval_per_update == 0:
+			torch.save({"encoder":encoder.state_dict(), "decoder":decoder.state_dict(), "input_representation": input_representation.state_dict()}, args.model_path_base+"/model"+str(int(check_iter/args.eval_per_update)))
+			
 			cstns1 = cstn_step1(actn_v, args)
 			cstns2 = cstn_step2(actn_v, args, starts, ends)
 			cstns3 = cstn_step3(actn_v, args)
@@ -287,7 +289,6 @@ def run_train(args):
 					w.write(" ".join(dev_output) + "\n")
 					w.flush()
 				w.close()
-			torch.save({"encoder":encoder.state_dict(), "decoder":decoder.state_dict(), "input_representation": input_representation.state_dict()}, args.model_path_base+"/model"+str(int(check_iter/args.eval_per_update)))
 			#exit(1)
 
 def run_test(args):
@@ -305,31 +306,28 @@ def run_test(args):
 
 	actn_v.toidx("<START>")
 	actn_v.toidx("<END>")
-	actn_v.toidx("B")
-	for i in range(args.B_l):
-		actn_v.toidx("b"+str(i))
-	actn_v.toidx("X")
 	for i in range(args.X_l):
-		actn_v.toidx("x"+str(i))
-	actn_v.toidx("E")
+		actn_v.toidx("X"+str(i+1))
 	for i in range(args.E_l):
-		actn_v.toidx("e"+str(i))
-	actn_v.toidx("S")
+		actn_v.toidx("E"+str(i+1))
 	for i in range(args.S_l):
-		actn_v.toidx("s"+str(i))
-	actn_v.toidx("T")
+		actn_v.toidx("S"+str(i+1))
 	for i in range(args.T_l):
-		actn_v.toidx("t"+str(i))
-	actn_v.toidx("P")
+		actn_v.toidx("T"+str(i+1))
 	for i in range(args.P_l):
-		actn_v.toidx("p"+str(i))
-	actn_v.toidx("|||")
+		actn_v.toidx("P"+str(i+1))
+	for i in range(args.K_l):
+		actn_v.toidx("K"+str(i+1))
+	for i in range(args.P_l):
+		actn_v.toidx("P"+str(i+1)+"(")
+	for i in range(args.K_l):
+		actn_v.toidx("K"+str(i+1)+"(")
+	actn_v.toidx("CARD_NUMBER")
+	actn_v.toidx("TIME_NUMBER")
+	actn_v.toidx(")")
 
 	actn_v.read_file(args.action_dict_path)
 	actn_v.freeze()
-
-	test_input = read_input(args.test_input)
-	test_comb = [ get_same_lemma(x[1]) for x in test_input]
 
 	extra_vl = [ vocabulary() for i in range(len(test_input[0])-1)]
 	for i in range(len(test_input[0])-1):
@@ -345,63 +343,114 @@ def run_test(args):
 		extra_vl_size.append(extra_vl[i].size())
 	print "action vocaluary size:", actn_v.size() - 1
 
-	test_instance, word_v, char_v, extra_vl = input2instance(test_input, word_v, char_v, pretrain, extra_vl, {}, args, "dev")
-
-	input_representation = token_representation(word_v.size(), char_v.size(), pretrain, extra_vl_size, args)
+	input_representation = sentence_rep(word_v.size(), char_v.size(), pretrain, extra_vl_size, args)
 	encoder = None
-	if args.encoder == "BILSTM":
-		from encoder.bilstm import encoder as enc
-	elif args.encoder == "Transformer":
-		from encoder.transformer import encoder as enc
+	#if args.encoder == "BILSTM":
+	#	from encoder.bilstm import encoder as enc
+	#elif args.encoder == "Transformer":
+	#	from encoder.transformer import encoder as enc
 	encoder = enc(args)
 	assert encoder, "please specify encoder type"
 	
-	
 	#check dict to get index
-
-	bxestp = [actn_v.toidx("B"), actn_v.toidx("X"), actn_v.toidx("E"), actn_v.toidx("S"), actn_v.toidx("T"), actn_v.toidx("P")]
-	#BOX SPECIAL SENSE DISCOURSE RELATION PREDICATE CONSTANT
+	#BOX DISCOURSE RELATION PREDICATE CONSTANT
 	starts = []
 	ends = []
 	lines = []
 	for line in open(args.action_dict_path):
 		line = line.strip()
 		if line == "###":
-			starts.append(actn_v.toidx(lines[1]))
+			starts.append(actn_v.toidx(lines[0]))
 			ends.append(actn_v.toidx(lines[-1]))
 			lines = []
 		else:
+			if line[0] == "#":
+				continue
 			lines.append(line)
 
-	mask = None
-	if args.sense:
-		mask = Mask(args, actn_v, starts, ends)
-	else:
-		mask = Mask_nosense(args, actn_v, starts, ends) 
-	decoder = dec(actn_v.size(), mask, actn_v.toidx("<START>"), actn_v.toidx("<END>"), bxestp, args)
+	#mask = Mask(args, actn_v, starts, ends)
+	decoder = dec(actn_v.size(), args, actn_v)
 
 	check_point = torch.load(args.model_path_base+"/model")
 	encoder.load_state_dict(check_point["encoder"])
 	decoder.load_state_dict(check_point["decoder"])
 	input_representation.load_state_dict(check_point["input_representation"])
+
 	if args.gpu:
 		encoder = encoder.cuda()
 		decoder = decoder.cuda()
 		input_representation = input_representation.cuda()
+	
 
+	test_input = read_input(args.test_input)
+	test_comb = [ get_same_lemma(x[1]) for x in test_input]
+	test_instance, word_v, char_v, extra_vl = input2instance(test_input, word_v, char_v, pretrain, extra_vl, {}, args, "dev")
+
+	cstns1 = cstn_step1(actn_v, args)
+	cstns2 = cstn_step2(actn_v, args, starts, ends)
+	cstns3 = cstn_step3(actn_v, args)
 	with open(args.test_output, "w") as w:
 		for j, instance in enumerate(test_instance):
 			print j
-			test_input_embeddings = input_representation(instance)
-			test_enc_rep = encoder(test_input_embeddings)
-			test_action_output = decoder(test_enc_rep, test_comb[j])
-			test_action_output_format = []
-			for act in test_action_output:
-				if act >= actn_v.size():
-					test_action_output_format.append("$"+str(act-actn_v.size()))
-				else:
-					test_action_output_format.append(actn_v.totok(act))
-			w.write(" ".join(test_action_output_format) + "\n")
+			test_input_t = input_representation(instance, singleton_idx_dict=None, train=False)
+			test_enc_rep_t, test_hidden_t= encoder(test_input_t, test_comb[j])
+
+			#step 1
+			test_hidden_step1 = (test_hidden_t[0].view(args.action_n_layer, 1, -1), test_hidden_t[1].view(args.action_n_layer, 1, -1))
+			cstns1.reset()
+			test_output_step1, test_hidden_rep_step1, test_hidden_step1 = decoder(actn_v.toidx("<START>"), test_hidden_step1, test_enc_rep_t, train=False, constraints=cstns1, opt=1)
+			#print test_output_step1
+
+			#step 2
+			test_output_step2 = []
+			test_hidden_rep_step2 = []
+			test_hidden_step2 = (test_hidden_t[0].view(args.action_n_layer, 1, -1), test_hidden_t[1].view(args.action_n_layer, 1, -1))
+			cstns2.reset_length(len(instance[0])-2) # <s> </s>
+			for k in range(len(test_output_step1)): # DRS( P1(
+				act1 = test_output_step1[k]
+				if actn_v.totok(act1) in ["DRS(", "SDRS("]:
+					cstns2.reset_condition(act1)
+					one_test_output_step2, one_test_hidden_rep_step2, test_hidden_step2 = decoder(test_hidden_rep_step1[k+1], test_hidden_step2, test_enc_rep_t, train=False, constraints=cstns2, opt=2)
+					test_output_step2.append(one_test_output_step2)
+					test_hidden_rep_step2.append(one_test_hidden_rep_step2)
+			#print test_output_step2
+
+			#step 3
+			k_scope = get_k_scope(test_output_step1, actn_v)
+			p_max = get_p_max(test_output_step1, actn_v)
+			
+			test_output_step3 = []
+			test_hidden_step3 = (test_hidden_t[0].view(args.action_n_layer, 1, -1), test_hidden_t[1].view(args.action_n_layer, 1, -1))
+			cstns3.reset(p_max)
+			k = 0
+			for act1 in test_output_step1:
+				if actn_v.totok(act1) in ["DRS(", "SDRS("]:
+					cstns3.reset_condition(act1)
+					for kk in range(len(test_output_step2[k])-1): # rel( rel( )
+						act2 = test_output_step2[k][kk]
+						cstns3.reset_relation(act2)
+						one_test_output_step3, _, test_hidden_step3 = decoder(test_hidden_rep_step2[k][kk+1], test_hidden_step3, test_enc_rep_t, train=False, constraints=cstns3, opt=3)
+						test_output_step3.append(one_test_output_step3)
+					k += 1
+			#print test_output_step3
+
+			# write file
+			test_output = []
+			k = 0
+			kk = 0
+			for act1 in test_output_step1:
+				test_output.append(actn_v.totok(act1))
+				if test_output[-1] in ["DRS(", "SDRS("]:
+					for act2 in test_output_step2[k][:-1]:
+						if act2 >= actn_v.size():
+							test_output.append("$"+str(act2-actn_v.size())+"(")
+						else:
+							test_output.append(actn_v.totok(act2))
+						for act3 in test_output_step3[kk]:
+							test_output.append(actn_v.totok(act3))
+						kk + 1
+					k += 1
+			w.write(" ".join(test_output) + "\n")
 			w.flush()
 		w.close()
 
