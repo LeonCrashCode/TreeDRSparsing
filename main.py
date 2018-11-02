@@ -84,9 +84,9 @@ def run_train(args):
 	#dev_output = read_output(args.dev_action)
 	train_action = tree2action(train_output, actn_v)
 	#dev_actoin, actn_v = output2action(dev_output, actn_v)
-	print train_action[0][0]
-	print train_action[0][1]
-	print train_action[0][2]
+	#print train_action[0][0]
+	#print train_action[0][1]
+	#print train_action[0][2]
 	print "word vocabulary size:", word_v.size()
 	word_v.dump(args.model_path_base+"/word.list")
 	print "char vocabulary size:", char_v.size()

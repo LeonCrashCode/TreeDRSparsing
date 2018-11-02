@@ -26,7 +26,7 @@ class decoder(nn.Module):
 		self.copy_matrix = torch.randn(1, self.args.action_hidden_dim, self.args.action_hidden_dim)
 		self.copy = nn.Linear(self.args.action_hidden_dim, self.args.action_dim)
 		if self.args.gpu:
-			self.copy_matrix = self.copy.cuda()
+			self.copy_matrix = self.copy_matrix.cuda()
 
 		self.criterion = nn.NLLLoss()
 
