@@ -331,7 +331,7 @@ def run_test(args):
 
 	test_input = read_input(args.test_input)
 	test_comb = [ get_same_lemma(x[1]) for x in test_input]
-	
+
 	extra_vl = [ vocabulary() for i in range(len(test_input[0])-1)]
 	for i in range(len(test_input[0])-1):
 		extra_vl[i].read_file(args.model_path_base+"/extra."+str(i+1)+".list")
@@ -395,7 +395,7 @@ def run_test(args):
 		for j, instance in enumerate(test_instance):
 			print j
 			test_input_t = input_representation(instance, singleton_idx_dict=None, train=False)
-			test_enc_rep_t, test_hidden_t= encoder(test_input_t, test_comb[j])
+			test_enc_rep_t, test_hidden_t= encoder(test_input_t, test_comb[j], train=Falses)
 
 			#step 1
 			test_hidden_step1 = (test_hidden_t[0].view(args.action_n_layer, 1, -1), test_hidden_t[1].view(args.action_n_layer, 1, -1))
