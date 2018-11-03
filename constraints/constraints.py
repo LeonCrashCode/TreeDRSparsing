@@ -62,6 +62,7 @@ class struct_constraints:
 	def _get_sos_mask(self):
 		re = self._get_zero(self.size)
 		self._assign(re, self.DRS, self.DRS, 1)
+		self._assign(re, self.SDRS, self.SDRS, 1)
 		return re
 	def _get_sdrs_mask(self):
 		#SDRS
