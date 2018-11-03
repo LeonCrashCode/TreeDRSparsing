@@ -23,10 +23,9 @@ class decoder(nn.Module):
 
 		self.out = nn.Linear(self.args.action_feature_dim, self.action_size)
 
-		self.copy_matrix = torch.randn(1, self.args.action_hidden_dim, self.args.action_hidden_dim)
+		self.copy_matrix = nn.Linear(self.args.action_hidden_dim, self.args.action_hidden_dim, bias=False)
 		self.copy = nn.Linear(self.args.action_hidden_dim, self.args.action_dim)
-		if self.args.gpu:
-			self.copy_matrix = self.copy_matrix.cuda()
+
 
 		self.criterion = nn.NLLLoss()
 
@@ -129,7 +128,8 @@ class decoder(nn.Module):
 
 			output, hidden = self.lstm(action_t, hidden)
 
-			copy_scores_t = torch.bmm(torch.bmm(output.transpose(0,1), self.copy_matrix), encoder_rep_t.transpose(0,1).unsqueeze(0)).view(output.size(0), -1)
+			copy_scores_t = torch.bmm(self.copy_matrix(output).transpose(0,1), encoder_rep_t.transpose(0,1).unsqueeze(0)).view(output.size(0), -1)
+			#copy_scores_t = torch.bmm(torch.bmm(output.transpose(0,1), self.copy_matrix), encoder_rep_t.transpose(0,1).unsqueeze(0)).view(output.size(0), -1)
 
 			attn_scores_t = torch.bmm(output.transpose(0,1), encoder_rep_t.transpose(0,1).unsqueeze(0))[0]
 			attn_weights_t = F.softmax(attn_scores_t, 1)
@@ -179,7 +179,8 @@ class decoder(nn.Module):
 				output, hidden = self.lstm(action_t, hidden)
 				hidden_reps.append(output)
 
-				copy_scores_t = torch.bmm(torch.bmm(output.transpose(0,1), self.copy_matrix), encoder_rep_t.transpose(0,1).unsqueeze(0)).view(output.size(0), -1)
+				copy_scores_t = torch.bmm(self.copy_matrix(output).transpose(0,1), encoder_rep_t.transpose(0,1).unsqueeze(0)).view(output.size(0), -1)
+				#copy_scores_t = torch.bmm(torch.bmm(output.transpose(0,1), self.copy_matrix), encoder_rep_t.transpose(0,1).unsqueeze(0)).view(output.size(0), -1)
 
 				attn_scores_t = torch.bmm(output.transpose(0,1), encoder_rep_t.transpose(0,1).unsqueeze(0))[0]
 				attn_weights_t = F.softmax(attn_scores_t, 1)
