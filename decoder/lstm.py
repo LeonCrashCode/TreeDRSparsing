@@ -252,9 +252,17 @@ class decoder(nn.Module):
 				constraint_t = torch.FloatTensor(constraint).unsqueeze(0)
 				if self.args.gpu:
 					constraint_t = constraint_t.cuda()
-
 				output, hidden = self.lstm(action_t, hidden)
+				#for i in range(len(constraint)):
+                                #        if constraint[i] == 1:
+                                #                print i,
+                                #print
 
+				#for i in range(len(constraint)):
+				#	if constraint[i] == 1:
+				#		print self.actn_v.totok(i),
+				#print
+				
 				attn_scores_t = torch.bmm(output.transpose(0,1), encoder_rep_t.transpose(0,1).unsqueeze(0))[0]
 				attn_weights_t = F.softmax(attn_scores_t, 1)
 				attn_hiddens_t = torch.bmm(attn_weights_t.unsqueeze(0),encoder_rep_t.unsqueeze(0))[0]
@@ -262,9 +270,10 @@ class decoder(nn.Module):
 				global_scores_t = self.out(feat_hiddens_t)
 
 				score = global_scores_t + (constraint_t - 1) * 1e10
-
+				#print score
 				_, input_t = torch.max(score,1)
 				idx = input_t.view(-1).data.tolist()[0]
+				#print "MAX IDX", idx
 				tokens.append(idx)
 
 				constraints.update(idx)

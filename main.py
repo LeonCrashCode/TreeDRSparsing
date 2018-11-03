@@ -230,7 +230,7 @@ def run_train(args):
 				for j, instance in enumerate(dev_instance):
 					print j
 					dev_input_t = input_representation(instance, singleton_idx_dict=None, train=False)
-					dev_enc_rep_t, dev_hidden_t= encoder(dev_input_t, dev_comb[j])
+					dev_enc_rep_t, dev_hidden_t= encoder(dev_input_t, dev_comb[j], train=False)
 
 					#step 1
 					dev_hidden_step1 = (dev_hidden_t[0].view(args.action_n_layer, 1, -1), dev_hidden_t[1].view(args.action_n_layer, 1, -1))
@@ -284,7 +284,7 @@ def run_train(args):
 									dev_output.append(actn_v.totok(act2))
 								for act3 in dev_output_step3[kk]:
 									dev_output.append(actn_v.totok(act3))
-								kk + 1
+								kk += 1
 							k += 1
 					w.write(" ".join(dev_output) + "\n")
 					w.flush()
@@ -338,13 +338,13 @@ def run_test(args):
 		extra_vl[i].freeze()
 
 	print "word vocabulary size:", word_v.size()
-	print "char vocabulary size:", char_v.size() - 1
-	print "pretrain vocabulary size:", pretrain.size() - 1
+	print "char vocabulary size:", char_v.size() 
+	print "pretrain vocabulary size:", pretrain.size()
 	extra_vl_size = []
 	for i in range(len(extra_vl)):
 		print "extra", i, "vocabulary size:", extra_vl[i].size()
 		extra_vl_size.append(extra_vl[i].size())
-	print "action vocaluary size:", actn_v.size() - 1
+	print "action vocaluary size:", actn_v.size() 
 
 	input_representation = sentence_rep(word_v.size(), char_v.size(), pretrain, extra_vl_size, args)
 	encoder = None
@@ -395,13 +395,13 @@ def run_test(args):
 		for j, instance in enumerate(test_instance):
 			print j
 			test_input_t = input_representation(instance, singleton_idx_dict=None, train=False)
-			test_enc_rep_t, test_hidden_t= encoder(test_input_t, test_comb[j], train=Falses)
+			test_enc_rep_t, test_hidden_t= encoder(test_input_t, test_comb[j], train=False)
 
 			#step 1
 			test_hidden_step1 = (test_hidden_t[0].view(args.action_n_layer, 1, -1), test_hidden_t[1].view(args.action_n_layer, 1, -1))
 			cstns1.reset()
 			test_output_step1, test_hidden_rep_step1, test_hidden_step1 = decoder(actn_v.toidx("<START>"), test_hidden_step1, test_enc_rep_t, train=False, constraints=cstns1, opt=1)
-			#print test_output_step1
+			#print [actn_v.totok(x) for x in test_output_step1]
 
 			#step 2
 			test_output_step2 = []
@@ -425,11 +425,21 @@ def run_test(args):
 			test_hidden_step3 = (test_hidden_t[0].view(args.action_n_layer, 1, -1), test_hidden_t[1].view(args.action_n_layer, 1, -1))
 			cstns3.reset(p_max)
 			k = 0
+			sdrs_idx = 0
 			for act1 in test_output_step1:
 				if actn_v.totok(act1) in ["DRS(", "SDRS("]:
-					cstns3.reset_condition(act1)
+					if actn_v.totok(act1) == "SDRS(":
+						cstns3.reset_condition(act1, k_scope[sdrs_idx])
+						sdrs_idx += 1
+					else:
+						cstns3.reset_condition(act1)
 					for kk in range(len(test_output_step2[k])-1): # rel( rel( )
 						act2 = test_output_step2[k][kk]
+						#if act2 >= actn_v.size():
+						#	print "$"+str(act2 - actn_v.size())+"("
+						#else:
+						#	print actn_v.totok(act2)
+							
 						cstns3.reset_relation(act2)
 						one_test_output_step3, _, test_hidden_step3 = decoder(test_hidden_rep_step2[k][kk+1], test_hidden_step3, test_enc_rep_t, train=False, constraints=cstns3, opt=3)
 						test_output_step3.append(one_test_output_step3)
@@ -450,7 +460,7 @@ def run_test(args):
 							test_output.append(actn_v.totok(act2))
 						for act3 in test_output_step3[kk]:
 							test_output.append(actn_v.totok(act3))
-						kk + 1
+						kk += 1
 					k += 1
 			w.write(" ".join(test_output) + "\n")
 			w.flush()
