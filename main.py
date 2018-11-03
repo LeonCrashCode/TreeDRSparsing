@@ -222,7 +222,7 @@ def run_train(args):
 		
 		if check_iter % args.eval_per_update == 0:
 			torch.save({"encoder":encoder.state_dict(), "decoder":decoder.state_dict(), "input_representation": input_representation.state_dict()}, args.model_path_base+"/model"+str(int(check_iter/args.eval_per_update)))
-			
+
 			cstns1 = cstn_step1(actn_v, args)
 			cstns2 = cstn_step2(actn_v, args, starts, ends)
 			cstns3 = cstn_step3(actn_v, args)
@@ -329,6 +329,9 @@ def run_test(args):
 	actn_v.read_file(args.action_dict_path)
 	actn_v.freeze()
 
+	test_input = read_input(args.test_input)
+	test_comb = [ get_same_lemma(x[1]) for x in test_input]
+	
 	extra_vl = [ vocabulary() for i in range(len(test_input[0])-1)]
 	for i in range(len(test_input[0])-1):
 		extra_vl[i].read_file(args.model_path_base+"/extra."+str(i+1)+".list")
@@ -382,8 +385,7 @@ def run_test(args):
 		input_representation = input_representation.cuda()
 	
 
-	test_input = read_input(args.test_input)
-	test_comb = [ get_same_lemma(x[1]) for x in test_input]
+	
 	test_instance, word_v, char_v, extra_vl = input2instance(test_input, word_v, char_v, pretrain, extra_vl, {}, args, "dev")
 
 	cstns1 = cstn_step1(actn_v, args)
