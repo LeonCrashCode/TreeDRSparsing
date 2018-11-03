@@ -259,9 +259,14 @@ def run_train(args):
 					dev_hidden_step3 = (dev_hidden_t[0].view(args.action_n_layer, 1, -1), dev_hidden_t[1].view(args.action_n_layer, 1, -1))
 					cstns3.reset(p_max)
 					k = 0
+					sdrs_idx = 0
 					for act1 in dev_output_step1:
 						if actn_v.totok(act1) in ["DRS(", "SDRS("]:
-							cstns3.reset_condition(act1)
+							if actn_v.totok(act1) == "SDRS(":
+								cstns3.reset_condition(act1, k_scope[sdrs_idx])
+								sdrs_idx += 1
+							else:
+								cstns3.reset_condition(act1)
 							for kk in range(len(dev_output_step2[k])-1): # rel( rel( )
 								act2 = dev_output_step2[k][kk]
 								cstns3.reset_relation(act2)
