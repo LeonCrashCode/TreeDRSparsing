@@ -1,3 +1,13 @@
+class struct_constraints_state:
+	def __init__(self):
+		self.reset()
+	def reset(self):
+		self.stack = [self.actn_v.toidx("<START>")]
+		self.stack_ex = [[0 for i in range(2)]]
+
+		self.k = 0
+		self.p = 0
+		self.drs_c = 0
 
 class struct_constraints:
 	def __init__(self, actn_v, args):
@@ -26,154 +36,145 @@ class struct_constraints:
 		self.k_relation_offset = 0
 		self.drs_offset = 1
 
-		self.reset()
-	def reset(self):
-		self.stack = [self.actn_v.toidx("<START>")]
-		self.stack_ex = [[0 for i in range(2)]]
+	def isterminal(self, state):
+		return len(state.stack) == 1
 
-		self.k = 0
-		self.p = 0
-		self.drs_c = 0
-
-	def isterminal(self):
-		return len(self.stack) == 1
-
-	def get_step_mask(self):
-		if self.stack[-1] == 0:
+	def get_step_mask(self, state):
+		if state.stack[-1] == 0:
 			#SOS
-			return self._get_sos_mask()
-		elif self.stack[-1] == self.SDRS:
+			return self._get_sos_mask(state)
+		elif state.stack[-1] == self.SDRS:
 			#SDRS
-			return self._get_sdrs_mask()
-		elif self.stack[-1] == self.DRS:
+			return self._get_sdrs_mask(state)
+		elif state.stack[-1] == self.DRS:
 			#DRS
-			return self._get_drs_mask()
-		elif self.stack[-1] in [self.NOT, self.NEC, self.POS]:
+			return self._get_drs_mask(state)
+		elif state.stack[-1] in [self.NOT, self.NEC, self.POS]:
 			#not, nec, pos
-			return self._get_1_mask()
-		elif self.stack[-1] in [self.OR, self.IMP, self.DUP]:
+			return self._get_1_mask(state)
+		elif state.stack[-1] in [self.OR, self.IMP, self.DUP]:
 			#or, imp, duplex
-			return self._get_2_mask()
-		elif self.stack[-1] == self.kb_start or self.stack[-1] == self.pb_start:
+			return self._get_2_mask(state)
+		elif state.stack[-1] == self.kb_start or self.stack[-1] == self.pb_start:
 			#k p
-			return self._get_1_mask()
+			return self._get_1_mask(state)
 		else:
 			assert False
-	def _get_sos_mask(self):
+	def _get_sos_mask(self, state):
 		re = self._get_zero(self.size)
 		self._assign(re, self.DRS, self.DRS, 1)
 		self._assign(re, self.SDRS, self.SDRS, 1)
 		return re
-	def _get_sdrs_mask(self):
+	def _get_sdrs_mask(self, state):
 		#SDRS
-		if self.stack_ex[-1][self.k_relation_offset] < 2:
+		if state.stack_ex[-1][self.k_relation_offset] < 2:
 			#only k
 			re = self._get_zero(self.size)
-			self._assign(re, self.kb_start + self.k, self.kb_start + self.k, 1)
+			self._assign(re, self.kb_start + state.k, self.kb_start + state.k, 1)
 			return re
 		else:
 			#only reduce
 			re = self._get_zero(self.size)
 			self._assign(re, self.sep, self.sep, 1)
 			#soft
-			if self.args.drs_l - self.drs_c >= 1:
+			if self.args.drs_l - state.drs_c >= 1:
 				cnt = 0
-				for i in range(len(self.stack)-1):
-					if self.stack[i] == self.SDRS:
-						cnt += max(0, 1 - self.stack_ex[i][self.k_relation_offset])
-				if self.k < self.args.K_l - cnt:
-					self._assign(re, self.kb_start + self.k, self.kb_start + self.k, 1)
+				for i in range(len(state.stack)-1):
+					if state.stack[i] == self.SDRS:
+						cnt += max(0, 1 - state.stack_ex[i][self.k_relation_offset])
+				if state.k < self.args.K_l - cnt:
+					self._assign(re, self.kb_start + state.k, self.kb_start + state.k, 1)
 			return re
-	def _get_drs_mask(self):
+	def _get_drs_mask(self, state):
 		re = self._get_zero(self.size)
 		self._assign(re, self.sep, self.sep, 1)
 
-		if self.args.drs_l - self.drs_c >= 1:
-			if self.p < self.args.P_l:
-				self._assign(re, self.pb_start + self.p, self.pb_start + self.p, 1)
+		if self.args.drs_l - state.drs_c >= 1:
+			if state.p < self.args.P_l:
+				self._assign(re, self.pb_start + state.p, self.pb_start + state.p, 1)
 			self._assign(re, self.NOT, self.NOT, 1)
 			self._assign(re, self.NEC, self.NEC, 1)
 			self._assign(re, self.POS, self.POS, 1)
-		if self.args.drs_l - self.drs_c >= 2:
+		if self.args.drs_l - state.drs_c >= 2:
 			self._assign(re, self.IMP, self.IMP, 1)
 			self._assign(re, self.DUP, self.DUP, 1)
 			self._assign(re, self.OR, self.OR, 1)
 		return re
 
-	def _get_1_mask(self):
+	def _get_1_mask(self, state):
 		re = self._get_zero(self.size)
-		if self.stack_ex[-1][self.drs_offset] == 0:
+		if state.stack_ex[-1][self.drs_offset] == 0:
 			self._assign(re, self.DRS, self.DRS, 1)
-			if self.args.drs_l - self.drs_c >= 2:
+			if self.args.drs_l - state.drs_c >= 2:
 				cnt = 0
-				for i in range(len(self.stack)-1):
-					if self.stack[i] == self.SDRS:
-						cnt += max(0, 1 - self.stack_ex[i][self.k_relation_offset])
-				if self.args.K_l - self.k - 2 >= cnt:
+				for i in range(len(state.stack)-1):
+					if state.stack[i] == self.SDRS:
+						cnt += max(0, 1 - state.stack_ex[i][self.k_relation_offset])
+				if self.args.K_l - state.k - 2 >= cnt:
 					self._assign(re, self.SDRS, self.SDRS, 1)
 		else:
 			self._assign(re, self.sep, self.sep, 1)
 		return re
-	def _get_2_mask(self):
+	def _get_2_mask(self, state):
 		re = self._get_zero(self.size)
-		if self.stack_ex[-1][self.drs_offset] == 0:
+		if state.stack_ex[-1][self.drs_offset] == 0:
 			self._assign(re, self.DRS, self.DRS, 1)
-			if self.args.drs_l - self.drs_c >= 3:
+			if self.args.drs_l - state.drs_c >= 3:
 				cnt = 0
-				for i in range(len(self.stack)-1):
-					if self.stack[i] == self.SDRS:
-						cnt += max(0, 1 - self.stack_ex[i][self.k_relation_offset])
-				if self.args.K_l - self.k - 2 >= cnt:
+				for i in range(len(state.stack)-1):
+					if state.stack[i] == self.SDRS:
+						cnt += max(0, 1 - state.stack_ex[i][self.k_relation_offset])
+				if self.args.K_l - state.k - 2 >= cnt:
 					self._assign(re, self.SDRS, self.SDRS, 1)
-		elif self.stack_ex[-1][self.drs_offset] == 1:
+		elif state.stack_ex[-1][self.drs_offset] == 1:
 			self._assign(re, self.DRS, self.DRS, 1)
-			if self.args.drs_l - self.drs_c >= 2:
+			if self.args.drs_l - state.drs_c >= 2:
 				cnt = 0
-				for i in range(len(self.stack)-1):
-					if self.stack[i] == self.SDRS:
-						cnt += max(0, 1 - self.stack_ex[i][self.k_relation_offset])
-				if self.args.K_l - self.k - 2 >= cnt:
+				for i in range(len(state.stack)-1):
+					if state.stack[i] == self.SDRS:
+						cnt += max(0, 1 - state.stack_ex[i][self.k_relation_offset])
+				if self.args.K_l - state.k - 2 >= cnt:
 					self._assign(re, self.SDRS, self.SDRS, 1)
 		else:
 			self._assign(re, self.sep, self.sep, 1)
 		return re
-	def update(self, ix):
+	def update(self, ix, state):
 		if ix in [self.DRS, self.SDRS, self.NOT, self.NEC, self.POS, self.IMP, self.DUP, self.OR]:
-			self.stack.append(ix)
+			state.stack.append(ix)
 			if ix == self.DRS:
-				self.drs_c += 1
-			self.stack_ex.append([0 for i in range(2)])
+				state.drs_c += 1
+			state.stack_ex.append([0 for i in range(2)])
 		elif ix >= self.kb_start and ix <= self.kb_end:
-			self.stack.append(self.kb_start)
-			self.stack_ex.append([0 for i in range(2)])
-			self.k += 1
+			state.stack.append(self.kb_start)
+			state.stack_ex.append([0 for i in range(2)])
+			state.k += 1
 		elif ix >= self.pb_start and ix <= self.pb_end:
-			self.stack.append(self.pb_start)
-			self.stack_ex.append([0 for i in range(2)])
-			self.p += 1
+			state.stack.append(self.pb_start)
+			state.stack_ex.append([0 for i in range(2)])
+			state.p+= 1
 		elif ix == self.sep:
-			self.stack_ex.pop()
-			if self.stack[-1] == self.DRS or self.stack[-1] == self.SDRS:
-				self.stack_ex[-1][self.drs_offset] += 1
-			elif self.stack[-1] in [self.NOT, self.NEC, self.POS, self.IMP, self.DUP, self.OR]:
+			state.stack_ex.pop()
+			if state.stack[-1] == self.DRS or state.stack[-1] == self.SDRS:
+				state.stack_ex[-1][self.drs_offset] += 1
+			elif state.stack[-1] in [self.NOT, self.NEC, self.POS, self.IMP, self.DUP, self.OR]:
 				pass
-			elif self.stack[-1] == self.kb_start:
-				self.stack_ex[-1][self.k_relation_offset] += 1
-			elif self.stack[-1] == self.pb_start:
+			elif state.stack[-1] == self.kb_start:
+				state.stack_ex[-1][self.k_relation_offset] += 1
+			elif state.stack[-1] == self.pb_start:
 				pass
 			else:
 				assert False
-			self.stack.pop()
+			state.stack.pop()
 		elif ix == 1:
 			pass
 		else:
 			assert False
 
-	def _print_state(self):
-		print "stack", [self.actn_v.totok(x) for x in self.stack]
-		print "stack_ex", self.stack_ex
-		print "kp", self.k, self.p
-		print "drs", self.drs_c
+	def _print_state(self, state):
+		print "stack", [self.actn_v.totok(x) for x in state.stack]
+		print "stack_ex", state.stack_ex
+		print "kp", state.k, self.p
+		print "drs", state.drs_c
 	def _get_one(self, size):
 		return [1 for i in range(size)]
 	def _get_zero(self, size):
@@ -184,6 +185,18 @@ class struct_constraints:
 			m[i] = v
 			i += 1
 
+class relation_constraints_state:
+	def __init__(self):
+		pass
+	def reset_length(self, copy_length):
+		self.copy_length = copy_length
+		self.rel_g = 0
+		self.d_rel_g = 0
+	def reset_condition(self, cond)
+		self.cond = cond
+		self.rel = 0
+		self.d_rel = 0
+		self.sep_exist = False
 
 class relation_constraints:
 	def __init__(self, actn_v, args, starts, ends):
@@ -198,64 +211,54 @@ class relation_constraints:
 		self.SDRS = actn_v.toidx("SDRS(")
 		self.sep = actn_v.toidx(")")
 
-	def reset_length(self, copy_length):
-		self.copy_length = copy_length
-		self.rel_g = 0
-		self.d_rel_g = 0
-	def reset_condition(self, cond):
-		self.cond = cond
-		self.rel = 0
-		self.d_rel = 0
-		self.sep_exist = False
+	def isterminal(self, state):
+		return state.sep_exist
 
-	def isterminal(self):
-		return self.sep_exist
-
-	def get_step_mask(self):
+	def get_step_mask(self, state):
 		BOX = 0
 		DISCOURSE = 1
 		RELATION = 2
 		PREDICATE = 3
 
-		re = self._get_zero(self.size + self.copy_length)
-		if self.cond == self.DRS:
-			if self.rel == 0:
+		re = self._get_zero(self.size + state.copy_length)
+		if state.cond == self.DRS:
+			if state.rel == 0:
 				self._assign(re, self.starts[RELATION], self.ends[RELATION], 1)
 				self._assign(re, self.starts[PREDICATE], self.ends[PREDICATE], 1)
-				self._assign(re, self.size, self.size+self.copy_length-1, 1)
+				self._assign(re, self.size, self.size+state.copy_length-1, 1)
 			else:
-				if self.args.rel_l - self.rel > 0 and self.args.rel_g_l - self.rel_g > 0:
+				if self.args.rel_l - state.rel > 0 and self.args.rel_g_l - state.rel_g > 0:
 					self._assign(re, self.starts[RELATION], self.ends[RELATION], 1)
 					self._assign(re, self.starts[PREDICATE], self.ends[PREDICATE], 1)
-					self._assign(re, self.size, self.size+self.copy_length-1, 1)
+					self._assign(re, self.size, self.size+state.copy_length-1, 1)
 				self._assign(re, self.sep, self.sep, 1)
-		elif self.cond == self.SDRS:
-			if self.d_rel == 0:
+		elif state.cond == self.SDRS:
+			if state.d_rel == 0:
 				self._assign(re, self.starts[DISCOURSE], self.ends[DISCOURSE], 1)
 			else:
-				if self.args.d_rel_l - self.d_rel > 0 and self.args.d_rel_g_l - self.d_rel_g > 0:
+				if self.args.d_rel_l - state.d_rel > 0 and self.args.d_rel_g_l - state.d_rel_g > 0:
 					self._assign(re, self.starts[DISCOURSE], self.ends[DISCOURSE], 1)
 				self._assign(re, self.sep, self.sep, 1)
 		else:
 			assert False
 		return re
 	
-	def update(self, ix):
+	def update(self, ix, state):
 		if ix == self.sep:
-			self.sep_exist = True
-		elif self.cond == self.DRS:
-			self.rel += 1
-			self.rel_g += 1
-		elif self.cond == self.SDRS:
-			self.d_rel += 1
-			self.d_rel_g += 1
+			state.sep_exist = True
+		elif state.cond == self.DRS:
+			state.rel += 1
+			state.rel_g += 1
+		elif state.cond == self.SDRS:
+			state.d_rel += 1
+			state.d_rel_g += 1
 		else:
 			assert False
 
-	def _print_state(self):
-		print "cond", self.actn_v.totok(self.cond)
-		print "rel g_rel", self.rel, self.rel_g
-		print "d_rel d_rel_g", self.d_rel, self.d_rel_g
+	def _print_state(self, state):
+		print "cond", self.actn_v.totok(state.cond)
+		print "rel g_rel", state.rel, state.rel_g
+		print "d_rel d_rel_g", state.d_rel, state.d_rel_g
 	def _get_one(self, size):
 		return [1 for i in range(size)]
 	def _get_zero(self, size):
@@ -265,6 +268,24 @@ class relation_constraints:
 		while i <=e:
 			m[i] = v
 			i += 1
+class variable_constraints_state:
+	def __init__(self):
+		pass
+	def reset(self, p_max):
+		self.p_max = p_max
+		self.x = 0
+		self.e = 0
+		self.s = 0
+		self.t = 0
+	def reset_condition(self, cond, k_scope=None):
+		self.cond = cond
+		self.k_scope = k_scope
+
+	def reset_relation(self, rel):
+		self.rel = rel
+		self.prev_v = -1
+		self.prev_prev_v = -1
+		self.sep_exist = False
 
 class variable_constraints:
 	def __init__(self, actn_v, args):
@@ -289,105 +310,88 @@ class variable_constraints:
 		self.CARD_b = actn_v.toidx("Card(")
 		self.TIME_b = actn_v.toidx("Timex(")
 
-	def reset(self, p_max):
-		self.p_max = p_max
-		self.x = 0
-		self.e = 0
-		self.s = 0
-		self.t = 0
+	def isterminal(self, state):
+		return state.sep_exist
 
-	def reset_condition(self, cond, k_scope=None):
-		self.cond = cond
-		self.k_scope = k_scope
-
-	def reset_relation(self, rel):
-		self.rel = rel
-		self.prev_v = -1
-		self.prev_prev_v = -1
-		self.sep_exist = False
-
-	def isterminal(self):
-		return self.sep_exist
-
-	def get_step_mask(self):
-		if self.cond == self.DRS:
-			return self.get_drs_mask()
-		elif self.cond == self.SDRS:
-			return self.get_sdrs_mask()
+	def get_step_mask(self, state):
+		if state.cond == self.DRS:
+			return self.get_drs_mask(state)
+		elif state.cond == self.SDRS:
+			return self.get_sdrs_mask(state)
 		else:
 			assert False
 
-	def _assign_all_v(self,re):
-		self._assign(re, self.x_start, self.x_start + self.x, 1)
-		self._assign(re, self.e_start, self.e_start + self.e, 1)
-		self._assign(re, self.s_start, self.s_start + self.s, 1)
-		self._assign(re, self.t_start, self.t_start + self.t, 1)
-	def get_drs_mask(self):
-		if self.prev_v == -1:
+	def _assign_all_v(self, re, state):
+		self._assign(re, self.x_start, self.x_start + state.x, 1)
+		self._assign(re, self.e_start, self.e_start + state.e, 1)
+		self._assign(re, self.s_start, self.s_start + state.s, 1)
+		self._assign(re, self.t_start, self.t_start + state.t, 1)
+	def get_drs_mask(self, state):
+		if state.prev_v == -1:
 			re = self._get_zero(self.size)
 			self._assign_all_v(re)
-			if self.p_max >= 0:
-				self._assign(re, self.p_start, self.p_start + self.p_max, 1)
+			if state.p_max >= 0:
+				self._assign(re, self.p_start, self.p_start + state.p_max, 1)
 			return re
-		elif self.prev_prev_v == -1:
+		elif state.prev_prev_v == -1:
 			re = self._get_zero(self.size)
-			if self.rel == self.CARD_b:
+			if state.rel == self.CARD_b:
 				self._assign(re, self.CARD, self.CARD, 1)
-			elif self.rel == self.TIME_b:
+			elif state.rel == self.TIME_b:
 				self._assign(re, self.TIME, self.TIME, 1)
 			else:
 				self._assign_all_v(re)
-				if self.p_max >= 0:
-					self._assign(re, self.p_start, self.p_start + self.p_max, 1)
+				if state.p_max >= 0:
+					self._assign(re, self.p_start, self.p_start + state.p_max, 1)
 				self._assign(re, self.sep, self.sep, 1)
 
-			if self.rel != self.equ:
-				self._assign(re, self.prev_v, self.prev_v, 0)
+			if state.rel != self.equ:
+				self._assign(re, state.prev_v, state.prev_v, 0)
 			return re
 		else:
 			re = self._get_zero(self.size)
 			self._assign(re, self.sep, self.sep, 1)
 			return re
-	def get_sdrs_mask(self):
-		if self.prev_v == -1:
+	def get_sdrs_mask(self, state):
+		if state.prev_v == -1:
 			re = self._get_zero(self.size)
-			for k in self.k_scope:
+			for k in state.k_scope:
 				self._assign(re, self.k_start + k, self.k_start + k, 1)
 			return re
-		elif self.prev_prev_v == -1:
+		elif state.prev_prev_v == -1:
 			re = self._get_zero(self.size)
-			for k in self.k_scope:
+			for k in state.k_scope:
 				self._assign(re, self.k_start + k, self.k_start + k, 1)
-			self._assign(re, self.prev_v, self.prev_v, 0)
+			self._assign(re, state.prev_v, state.prev_v, 0)
 			return re
 		else:
 			re = self._get_zero(self.size)
 			self._assign(re, self.sep, self.sep, 1)
 			return re
-	def update(self, ix):
+	def update(self, ix, state):
 		if ix == self.sep:
-			self.sep_exist = True
-		elif ix == self.x_start + self.x:
-			self.x += 1
-		elif ix == self.e_start + self.e:
-			self.e += 1
-		elif ix == self.s_start + self.s:
-			self.s += 1
-		elif ix == self.t_start + self.t:
-			self.t += 1
-		self.prev_prev_v = self.prev_v
-		self.prev_v = ix
+			state.sep_exist = True
+		elif ix == self.x_start + state.x:
+			state.x += 1
+		elif ix == self.e_start + state.e:
+			state.e += 1
+		elif ix == self.s_start + state.s:
+			state.s += 1
+		elif ix == self.t_start + state.t:
+			state.t += 1
+		state.prev_prev_v = state.prev_v
+		state.prev_v = ix
 
-	def _print_state(self):
-		print "cond", self.actn_v.totok(self.cond)
-		if self.rel >= self.size:
-			print "rel", "$"+str(self.rel - self.size)+"("
+	def _print_state(self, state):
+		print "cond", self.actn_v.totok(state.cond)
+		if state.rel >= self.size:
+			print "rel", "$"+str(state.rel - self.size)+"("
 		else:
-			print "rel", self.actn_v.totok(self.rel)
-		print "p_max", self.p_max
-		print "k_scope", self.k_scope
-		print "xest", self.x, self.e, self.s, self.t
-		print "prev_prev_v prev_v", self.prev_prev_v, self.prev_v
+			print "rel", self.actn_v.totok(state.rel)
+		print "p_max", state.p_max
+		print "k_scope", state.k_scope
+		print "xest", state.x, state.e, state.s, state.t
+		print "prev_prev_v prev_v", state.prev_prev_v, state.prev_v
 	def _get_one(self, size):
 		return [1 for i in range(size)]
 	def _get_zero(self, size):
