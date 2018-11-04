@@ -17,8 +17,11 @@ from decoder.lstm import decoder as dec
 from utils import get_k_scope
 from utils import get_p_max
 from constraints.constraints import struct_constraints as cstn_step1
+from constraints.constraints import struct_constraints_state as state_step1
 from constraints.constraints import relation_constraints as cstn_step2
+from constraints.constraints import relation_constraints_state as state_step2
 from constraints.constraints import variable_constraints as cstn_step3
+from constraints.constraints import variable_constraints_state as state_step3
 
 import torch
 from optimizer import optimizer
@@ -130,7 +133,7 @@ def run_train(args):
 			lines.append(line)
 
 	#mask = Mask(args, actn_v, starts, ends)
-	decoder = dec(actn_v.size(), args, actn_v)
+	decoder = dec(actn_v.size(), args, actn_v, [cstn_step1, cstn_step2, cstn_step3])
 
 	if args.gpu:
 		encoder = encoder.cuda()
@@ -168,7 +171,7 @@ def run_train(args):
 		enc_rep_t, hidden_t = encoder(input_t, train_comb[i], train=True)
 		#step 1
 		hidden_step1 = (hidden_t[0].view(args.action_n_layer, 1, -1), hidden_t[1].view(args.action_n_layer, 1, -1))
-		loss_t1, hidden_rep_t, hidden_step1 = decoder(train_action[i][0], hidden_step1, enc_rep_t, train=True, constraints=None, opt=1)
+		loss_t1, hidden_rep_t, hidden_step1 = decoder(train_action[i][0], hidden_step1, enc_rep_t, train=True, state=None, opt=1)
 		check_loss1 += loss_t1.data.tolist()
 		
 		#step 2
@@ -181,7 +184,7 @@ def run_train(args):
 				train_action_step2.append([hidden_rep_t[j], train_action[i][1][idx]])
 				idx += 1
 		assert idx == len(train_action[i][1])
-		loss_t2, hidden_rep_t, hidden_step2 = decoder(train_action_step2, hidden_step2, enc_rep_t, train=True, constraints=None, opt=2)
+		loss_t2, hidden_rep_t, hidden_step2 = decoder(train_action_step2, hidden_step2, enc_rep_t, train=True, state=None, opt=2)
 		check_loss2 += loss_t2.data.tolist()
 		
 		#step 3
@@ -199,7 +202,7 @@ def run_train(args):
 				train_action_step3.append([hidden_rep_t[j], train_action[i][2][idx]])
 				idx += 1
 		assert idx == len(train_action[i][2])
-		loss_t3, hidden_rep_t, hidden_step3 = decoder(train_action_step3, hidden_step3, enc_rep_t, train=True, constraints=None, opt=3)
+		loss_t3, hidden_rep_t, hidden_step3 = decoder(train_action_step3, hidden_step3, enc_rep_t, train=True, state=None, opt=3)
 		check_loss3 += loss_t3.data.tolist()
 
 		if check_iter % args.check_per_update == 0:
@@ -224,9 +227,9 @@ def run_train(args):
 		if check_iter % args.eval_per_update == 0:
 			torch.save({"encoder":encoder.state_dict(), "decoder":decoder.state_dict(), "input_representation": input_representation.state_dict()}, args.model_path_base+"/model"+str(int(check_iter/args.eval_per_update)))
 
-			cstns1 = cstn_step1(actn_v, args)
-			cstns2 = cstn_step2(actn_v, args, starts, ends)
-			cstns3 = cstn_step3(actn_v, args)
+			cstns1 = [cstn_step1(actn_v, args) for b in range(args.beam_size)]
+			cstns2 = [cstn_step2(actn_v, args, starts, ends) for b in range(args.beam_size)]
+			cstns3 = [cstn_step3(actn_v, args) for b in range(args.beam_size)]
 			with open(args.dev_output_path_base+"/"+str(int(check_iter/args.eval_per_update)), "w") as w:
 				for j, instance in enumerate(dev_instance):
 					print j
@@ -235,7 +238,8 @@ def run_train(args):
 
 					#step 1
 					dev_hidden_step1 = (dev_hidden_t[0].view(args.action_n_layer, 1, -1), dev_hidden_t[1].view(args.action_n_layer, 1, -1))
-					cstns1.reset()
+					for b in range(args.beam_size):
+						cstns1[b].reset()
 					dev_output_step1, dev_hidden_rep_step1, dev_hidden_step1 = decoder(actn_v.toidx("<START>"), dev_hidden_step1, dev_enc_rep_t, train=False, constraints=cstns1, opt=1)
 					#print dev_output_step1
 
@@ -243,12 +247,14 @@ def run_train(args):
 					dev_output_step2 = []
 					dev_hidden_rep_step2 = []
 					dev_hidden_step2 = (dev_hidden_t[0].view(args.action_n_layer, 1, -1), dev_hidden_t[1].view(args.action_n_layer, 1, -1))
-					cstns2.reset_length(len(instance[0])-2) # <s> </s>
+					for b in range(args.beam_size):
+						cstns2[b].reset_length(len(instance[0])-2) # <s> </s>
 					for k in range(len(dev_output_step1)): # DRS( P1(
 						act1 = dev_output_step1[k]
 						if actn_v.totok(act1) in ["DRS(", "SDRS("]:
-							cstns2.reset_condition(act1)
-							one_dev_output_step2, one_dev_hidden_rep_step2, dev_hidden_step2 = decoder(dev_hidden_rep_step1[k+1], dev_hidden_step2, dev_enc_rep_t, train=False, constraints=cstns2, opt=2)
+							for b in range(args.beam_size):
+								cstns2[b].reset_condition(act1)
+							one_dev_output_step2, one_dev_hidden_rep_step2, dev_hidden_step2 = decoder(dev_hidden_rep_step1[k+1], dev_hidden_step2, dev_enc_rep_t, train=False, constraints=cstns2, state=None, opt=2)
 							dev_output_step2.append(one_dev_output_step2)
 							dev_hidden_rep_step2.append(one_dev_hidden_rep_step2)
 					#print dev_output_step2
@@ -258,19 +264,23 @@ def run_train(args):
 					p_max = get_p_max(dev_output_step1, actn_v)
 					dev_output_step3 = []
 					dev_hidden_step3 = (dev_hidden_t[0].view(args.action_n_layer, 1, -1), dev_hidden_t[1].view(args.action_n_layer, 1, -1))
-					cstns3.reset(p_max)
+					for b in range(args.beam_size):
+						cstns3[b].reset(p_max)
 					k = 0
 					sdrs_idx = 0
 					for act1 in dev_output_step1:
 						if actn_v.totok(act1) in ["DRS(", "SDRS("]:
 							if actn_v.totok(act1) == "SDRS(":
-								cstns3.reset_condition(act1, k_scope[sdrs_idx])
+								for b in range(args.beam_size):
+									cstns3[b].reset_condition(act1, k_scope[sdrs_idx])
 								sdrs_idx += 1
 							else:
-								cstns3.reset_condition(act1)
+								for b in range(args.beam_size):
+									cstns3[b].reset_condition(act1)
 							for kk in range(len(dev_output_step2[k])-1): # rel( rel( )
 								act2 = dev_output_step2[k][kk]
-								cstns3.reset_relation(act2)
+								for b in range(args.beam_size):
+									cstns3[b].reset_relation(act2)
 								one_dev_output_step3, _, dev_hidden_step3 = decoder(dev_hidden_rep_step2[k][kk+1], dev_hidden_step3, dev_enc_rep_t, train=False, constraints=cstns3, opt=3)
 								dev_output_step3.append(one_dev_output_step3)
 							k += 1
@@ -665,6 +675,7 @@ if __name__ == "__main__":
 	subparser.add_argument("--dev-action", default="data/22.gold")
 	subparser.add_argument("--dev-output", default="data/22.auto.clean.notop")
 	subparser.add_argument("--batch-size", type=int, default=250)
+	subparser.add_argument("--beam-size", type=int, default=1)
 	subparser.add_argument("--check-per-update", type=int, default=1000)
 	subparser.add_argument("--eval-per-update", type=int, default=30000)
 	subparser.add_argument("--eval-path-base", default="EVALB")

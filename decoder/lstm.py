@@ -4,8 +4,21 @@ import torch.nn.functional as F
 
 import types
 
+class beam(self):
+	def __init__(self):
+		self.prev_beam_idx = None
+		self.score = None
+
+		self.action_t = None
+		self.hidden_t = None
+		self.token = None
+		self.state = None
+
+		self.output_t = None
+		self.next_hidden_t = None
+
 class decoder(nn.Module):
-	def __init__(self, action_size, args, actn_v):
+	def __init__(self, action_size, args, actn_v, constraints):
 		super(decoder, self).__init__()
 		self.action_size = action_size
 		self.args = args
@@ -30,16 +43,18 @@ class decoder(nn.Module):
 		self.criterion = nn.NLLLoss()
 
 		self.actn_v = actn_v
-	def forward(self, inputs, hidden, encoder_rep_t, train, constraints, opt):
+
+		self.cstn1, self.cstn2, self.cstn3 = constraints
+	def forward(self, inputs, hidden, encoder_rep_t, train, state, opt):
 		if opt == 1:
-			return self.forward_1(inputs, hidden, encoder_rep_t, train, constraints)
+			return self.forward_1(inputs, hidden, encoder_rep_t, train, state)
 		elif opt == 2:
-			return self.forward_2(inputs, hidden, encoder_rep_t, train, constraints)
+			return self.forward_2(inputs, hidden, encoder_rep_t, train, state)
 		elif opt == 3:
-			return self.forward_3(inputs, hidden, encoder_rep_t, train, constraints)
+			return self.forward_3(inputs, hidden, encoder_rep_t, train, state)
 		else:
 			assert False, "unrecognized option"
-	def forward_1(self, input, hidden, encoder_rep_t, train, constraints):
+	def forward_1(self, input, hidden, encoder_rep_t, train, state):
 
 		if train:
 			self.lstm.dropout = self.args.dropout_f
@@ -69,42 +84,116 @@ class decoder(nn.Module):
 		else:
 			self.lstm.dropout = 0.0
 			tokens = []
+			hidden_rep = []
+
 			input_t = torch.LongTensor([input])
 			if self.args.gpu:
 				input_t = input_t.cuda()
-			hidden_rep = []
-			hidden = (hidden[0].view(self.args.action_n_layer, 1, -1), hidden[1].view(self.args.action_n_layer, 1, -1))
+
+			hidden_t = (hidden[0].view(self.args.action_n_layer, 1, -1), hidden[1].view(self.args.action_n_layer, 1, -1))
 			action_t = self.embeds(input_t).unsqueeze(1)
-			while True:
-				constraint = constraints.get_step_mask()
-				constraint_t = torch.FloatTensor(constraint).unsqueeze(0)
-				if self.args.gpu:
-					constraint_t = constraint_t.cuda()
 
-				output, hidden = self.lstm(action_t, hidden)
-				hidden_rep.append(output)
+			beam = Beam()
+			beam.prev_beam_idx = -1
+			beam.score = 0
 
-				attn_scores_t = torch.bmm(output.transpose(0,1), encoder_rep_t.transpose(0,1).unsqueeze(0))[0]
-				attn_weights_t = F.softmax(attn_scores_t, 1)
-				attn_hiddens_t = torch.bmm(attn_weights_t.unsqueeze(0),encoder_rep_t.unsqueeze(0))[0]
-				feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((attn_hiddens_t, action_t.view(output.size(0),-1)), 1)))
-				global_scores_t = self.out(feat_hiddens_t)
+			beam.action_t = action_t
+			beam.hidden_t = hidden_t
+			beam.state = state
 
-				score = global_scores_t + (constraint_t - 1.0) * 1e10
+			beamMatrix = [[beam]]
+			all_terminal = False
+			while !all_terminal:
+				b = 0
+				all_terminal = True
+				while b < len(beamMatrix[-1]):
+					#pick a beam
+					beam = beamMatrix[-1][b]
+					#if the beam is terminal, directly extended without prediction 
+					if self.cstn1.isterminal(beam.state):
+						tmp.append([beam.score, -1, b])
+						b += 1
+						continue
 
-				_, input_t = torch.max(score,1)
-				idx = input_t.view(-1).data.tolist()[0]
-				tokens.append(idx)
+					all_terminal = False
 
-				constraints.update(idx)
+					#expand beam
+					output, next_hidden = self.lstm(beam.action_t, beam.hidden_t)
+					beam.output_t = output
+					beam.next_hidden_t = next_hidden
 
-				if constraints.isterminal():
+					attn_scores_t = torch.bmm(output.transpose(0,1), encoder_rep_t.transpose(0,1).unsqueeze(0))[0]
+					attn_weights_t = F.softmax(attn_scores_t, 1)
+					attn_hiddens_t = torch.bmm(attn_weights_t.unsqueeze(0),encoder_rep_t.unsqueeze(0))[0]
+					feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((attn_hiddens_t, action_t.view(output.size(0),-1)), 1)))
+					global_scores_t = self.out(feat_hiddens_t)
+
+					constraint = self.cstn1.get_step_mask(beam.state)
+					constraint_t = torch.FloatTensor(constraint).unsqueeze(0)
+					if self.args.gpu:
+						constraint_t = constraint_t.cuda()
+					score_t = global_scores_t + (constraint_t - 1.0) * 1e10
+
+					scores = score_t.view(-1).data.tolist()
+					scores = [ [scores[i], i] for i in range(len(scores))]
+					scores.sort(reverse=True)
+
+					for s in scores:
+						if constraint[s[-1]] == 0:
+							break
+						average_s = ( s[0] + beam.score * (len(beamMatrix) - 1) ) / len(beamMatrix)
+						tmp.append([average_s, s[1], b]) #score tok_idx prev_beam_idx
+
+				if all_terminal:
 					break
 
-				action_t = self.embeds(input_t).view(1, 1, -1)
-			return tokens, hidden_rep, hidden
+				# candidates
+				tmp.sort(reverse=True)
+				b = 0
+				beamMatrix.append([])
+				while b < len(tmp) and b < self.args.beam_size:
+					score, tok_idx, prev_beam_idx = tmp[b]
+					if tok_idx == -1:
+						new_beam = Beam()
+						new_beam.prev_beam_idx = prev_beam_idx
+						new_beam.score = score
 
-	def forward_2(self, input, hidden, encoder_rep_t, train, constraints):
+						new_beam.hidden_t = beamMatrix[-2][prev_beam_idx].hidden_t
+						new_beam.state = beamMatrix[-2][prev_beam_idx].state
+
+						beamMatrix[-1].append(new_beam)
+						b += 1
+						continue
+					#input, tok_idx, hidden, state, prev_beam_idx, score
+					new_beam = Beam()
+					new_beam.prev_beam_idx = prev_beam_idx
+					new_beam.score = score
+
+					new_beam.action_t = self.embeds(torch.LongTensor([tok_idx])).view(1, 1, -1)
+					new_beam.hidden_t = beamMatrix[-2][prev_beam_idx].next_hidden_t # next hidden
+					new_beam.token = tok_idx
+					new_beam.state = copy.deepcopy(beamMatrix[-2][prev_beam_idx].state) #state
+					self.cstn1.update(idx, new_beam.state)
+
+					beamMatrix[-1].append(new_beam)
+					b += 1
+
+			b = 0
+			step = len(beamMatrix) - 1
+			beam_idx = 0
+			hidden = beamMatrix[step][beam_idx].hidden_t
+			while True:
+				beam = beamMatrix[step][beam_idx]
+				if beam.token:
+					tokens.append(beam.token)
+					hidden_rep.apend(beam.output)
+				step -= 1
+				beam_idx = beam.prev_beam_idx
+				if step < 0:
+					break
+			return tokens[::-1], hidden_rep[::-1], hidden
+
+	def forward_2(self, input, hidden, encoder_rep_t, train, state):
 		if train:
 			self.lstm.dropout = self.args.dropout_f
 			List = []
@@ -167,47 +256,122 @@ class decoder(nn.Module):
 		else:
 			self.lstm.dropout = 0.0
 			tokens = []
-			hidden_reps = []
+			hidden_rep = []
+
 			action_t = self.struct2rel(input).view(1, 1,-1)
 
-			while True:
-				constraint = constraints.get_step_mask()
-				constraint_t = torch.FloatTensor(constraint).unsqueeze(0)
-				if self.args.gpu:
-					constraint_t = constraint_t.cuda()
+			beam = Beam()
+			beam.prev_beam_idx = -1
+			beam.score = 0
 
-				output, hidden = self.lstm(action_t, hidden)
-				hidden_reps.append(output)
+			beam.action_t = self.struct2rel(input).view(1, 1,-1)
+			beam.hidden_t = hidden
+			beam.state = state
 
-				copy_scores_t = torch.bmm(self.copy_matrix(output).transpose(0,1), encoder_rep_t.transpose(0,1).unsqueeze(0)).view(output.size(0), -1)
-				#copy_scores_t = torch.bmm(torch.bmm(output.transpose(0,1), self.copy_matrix), encoder_rep_t.transpose(0,1).unsqueeze(0)).view(output.size(0), -1)
+			beamMatrix = [[beam]]
+			all_terminal = False
+			while !all_terminal:
 
-				attn_scores_t = torch.bmm(output.transpose(0,1), encoder_rep_t.transpose(0,1).unsqueeze(0))[0]
-				attn_weights_t = F.softmax(attn_scores_t, 1)
-				attn_hiddens_t = torch.bmm(attn_weights_t.unsqueeze(0),encoder_rep_t.unsqueeze(0))[0]
-				feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((attn_hiddens_t, action_t.view(output.size(0),-1)), 1)))
-				global_scores_t = self.out(feat_hiddens_t)
+				b = 0
+				all_terminal = True
+				while b < len(beamMatrix[-1]):
+					#pick a beam
+					beam = beamMatrix[-1][b]
+					#if the beam is terminal, directly extended without prediction 
+					if self.cstn1.isterminal(beam.state):
+						tmp.append([beam.score, -1, b])
+						b += 1
+						continue
 
-				total_score = torch.cat((global_scores_t, copy_scores_t), 1)
+					all_terminal = False
 
-				total_score = total_score + (constraint_t - 1) * 1e10
+					output, next_hidden = self.lstm(beam.action_t, beam.hidden_t)
+					beam.output_t = output
+					beam.next_hidden_t = next_hidden
 
-				_, input_t = torch.max(total_score,1)
 
-				idx = input_t.view(-1).data.tolist()[0]
-				tokens.append(idx)
-				constraints.update(idx)
-				if constraints.isterminal():
+					copy_scores_t = torch.bmm(self.copy_matrix(output).transpose(0,1), encoder_rep_t.transpose(0,1).unsqueeze(0)).view(output.size(0), -1)
+					#copy_scores_t = torch.bmm(torch.bmm(output.transpose(0,1), self.copy_matrix), encoder_rep_t.transpose(0,1).unsqueeze(0)).view(output.size(0), -1)
+
+					attn_scores_t = torch.bmm(output.transpose(0,1), encoder_rep_t.transpose(0,1).unsqueeze(0))[0]
+					attn_weights_t = F.softmax(attn_scores_t, 1)
+					attn_hiddens_t = torch.bmm(attn_weights_t.unsqueeze(0),encoder_rep_t.unsqueeze(0))[0]
+					feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((attn_hiddens_t, action_t.view(output.size(0),-1)), 1)))
+					global_scores_t = self.out(feat_hiddens_t)
+
+					total_score = torch.cat((global_scores_t, copy_scores_t), 1)
+
+					constraint = self.cstn2.get_step_mask(beam.state)
+					constraint_t = torch.FloatTensor(constraint).unsqueeze(0)
+					if self.args.gpu:
+						constraint_t = constraint_t.cuda()
+
+					total_score = total_score + (constraint_t - 1) * 1e10
+
+					scores = total_score.view(-1).data.tolist()
+					scores = [ [scores[i], i] for i in range(len(scores))]
+					scores.sort(reverse=True)
+
+					for s in scores:
+						if constraint[s[-1]] == 0:
+							break
+						average_s = ( s[0] + beam.score * (len(beamMatrix) - 1) ) / len(beamMatrix)
+						tmp.append([average_s, s[1], b]) #score tok_idx prev_beam_idx
+
+				if all_terminal:
 					break
 
-				if idx >= self.action_size:
-					action_t = self.copy(encoder_rep_t[idx - self.action_size].view(1, 1, -1))
-				else:
-					action_t = self.embeds(input_t).view(1, 1, -1)
+				# candidates
+				tmp.sort(reverse=True)
+				b = 0
+				beamMatrix.append([])
+				while b < len(tmp) and b < self.args.beam_size:
+					score, tok_idx, prev_beam_idx = tmp[b]
+					if tok_idx == -1:
+						new_beam = Beam()
+						new_beam.prev_beam_idx = prev_beam_idx
+						new_beam.score = score
 
-			return tokens, hidden_reps, hidden
+						new_beam.hidden_t = beamMatrix[-2][prev_beam_idx].hidden_t
+						new_beam.state = beamMatrix[-2][prev_beam_idx].state
 
-	def forward_3(self, input, hidden, encoder_rep_t, train, constraints):
+						beamMatrix[-1].append(new_beam)
+						b += 1
+						continue
+					#input, tok_idx, hidden, state, prev_beam_idx, score
+					new_beam = Beam()
+					new_beam.prev_beam_idx = prev_beam_idx
+					new_beam.score = score
+
+					if tok_idx >= self.action_size:
+						new_beam.action_t = self.copy(encoder_rep_t[tok_idx - self.action_size].view(1, 1, -1))
+					else:
+						new_beam.action_t = self.embeds(torch.LongTensor([tok_idx])).view(1, 1, -1)
+
+					new_beam.hidden_t = beamMatrix[-2][prev_beam_idx].next_hidden_t # next hidden
+					new_beam.token = tok_idx
+					new_beam.state = copy.deepcopy(beamMatrix[-2][prev_beam_idx].state) #state
+					self.cstn1.update(idx, new_beam.state)
+
+					beamMatrix[-1].append(new_beam)
+					b += 1
+
+			b = 0
+			step = len(beamMatrix) - 1
+			beam_idx = 0
+			hidden = beamMatrix[step][beam_idx].hidden_t
+			while True:
+				beam = beamMatrix[step][beam_idx]
+				if beam.token:
+					tokens.append(beam.token)
+					hidden_rep.apend(beam.output)
+				step -= 1
+				beam_idx = beam.prev_beam_idx
+				if step < 0:
+					break
+			return tokens[::-1], hidden_reps[::-1], hidden
+
+	def forward_3(self, input, hidden, encoder_rep_t, train, state):
 		if train:
 			self.lstm.dropout = self.args.dropout_f
 			List = []
@@ -246,41 +410,107 @@ class decoder(nn.Module):
 		else:
 			self.lstm.dropout = 0.0
 			tokens = []
+			hidden_rep = []
+
 			action_t = self.rel2var(input).view(1, 1,-1)
-			while True:
-				constraint = constraints.get_step_mask()
-				constraint_t = torch.FloatTensor(constraint).unsqueeze(0)
-				if self.args.gpu:
-					constraint_t = constraint_t.cuda()
-				output, hidden = self.lstm(action_t, hidden)
-				#for i in range(len(constraint)):
-                                #        if constraint[i] == 1:
-                                #                print i,
-                                #print
 
-				#for i in range(len(constraint)):
-				#	if constraint[i] == 1:
-				#		print self.actn_v.totok(i),
-				#print
-				
-				attn_scores_t = torch.bmm(output.transpose(0,1), encoder_rep_t.transpose(0,1).unsqueeze(0))[0]
-				attn_weights_t = F.softmax(attn_scores_t, 1)
-				attn_hiddens_t = torch.bmm(attn_weights_t.unsqueeze(0),encoder_rep_t.unsqueeze(0))[0]
-				feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((attn_hiddens_t, action_t.view(output.size(0),-1)), 1)))
-				global_scores_t = self.out(feat_hiddens_t)
+			beam = Beam()
+			beam.prev_beam_idx = -1
+			beam.score = 0
 
-				score = global_scores_t + (constraint_t - 1) * 1e10
-				#print score
-				_, input_t = torch.max(score,1)
-				idx = input_t.view(-1).data.tolist()[0]
-				#print "MAX IDX", idx
-				tokens.append(idx)
+			beam.action_t = action_t
+			beam.hidden_t = hidden_t
+			beam.state = state
 
-				constraints.update(idx)
+			beamMatrix = [[beam]]
+			all_terminal = False
+			while !all_terminal:
+				b = 0
+				all_terminal = True
+				while b < len(beamMatrix[-1]):
+					#pick a beam
+					beam = beamMatrix[-1][b]
+					#if the beam is terminal, directly extended without prediction 
+					if self.cstn1.isterminal(beam.state):
+						tmp.append([beam.score, -1, b])
+						b += 1
+						continue
 
-				if constraints.isterminal():
+					all_terminal = False
+
+					#expand beam
+					output, next_hidden = self.lstm(beam.action_t, beam.hidden_t)
+					beam.output_t = output
+					beam.next_hidden_t = next_hidden
+
+					attn_scores_t = torch.bmm(output.transpose(0,1), encoder_rep_t.transpose(0,1).unsqueeze(0))[0]
+					attn_weights_t = F.softmax(attn_scores_t, 1)
+					attn_hiddens_t = torch.bmm(attn_weights_t.unsqueeze(0),encoder_rep_t.unsqueeze(0))[0]
+					feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((attn_hiddens_t, action_t.view(output.size(0),-1)), 1)))
+					global_scores_t = self.out(feat_hiddens_t)
+
+					constraint = self.cstn3.get_step_mask(beam.state)
+					constraint_t = torch.FloatTensor(constraint).unsqueeze(0)
+					if self.args.gpu:
+						constraint_t = constraint_t.cuda()
+					score_t = global_scores_t + (constraint_t - 1.0) * 1e10
+
+					scores = score_t.view(-1).data.tolist()
+					scores = [ [scores[i], i] for i in range(len(scores))]
+					scores.sort(reverse=True)
+
+					for s in scores:
+						if constraint[s[-1]] == 0:
+							break
+						average_s = ( s[0] + beam.score * (len(beamMatrix) - 1) ) / len(beamMatrix)
+						tmp.append([average_s, s[1], b]) #score tok_idx prev_beam_idx
+
+				if all_terminal:
 					break
-				action_t = self.embeds(input_t).view(1, 1, -1)
-				
-			return tokens, None, hidden
+
+				# candidates
+				tmp.sort(reverse=True)
+				b = 0
+				beamMatrix.append([])
+				while b < len(tmp) and b < self.args.beam_size:
+					score, tok_idx, prev_beam_idx = tmp[b]
+					if tok_idx == -1:
+						new_beam = Beam()
+						new_beam.prev_beam_idx = prev_beam_idx
+						new_beam.score = score
+
+						new_beam.hidden_t = beamMatrix[-2][prev_beam_idx].hidden_t
+						new_beam.state = beamMatrix[-2][prev_beam_idx].state
+
+						beamMatrix[-1].append(new_beam)
+						b += 1
+						continue
+					#input, tok_idx, hidden, state, prev_beam_idx, score
+					new_beam = Beam()
+					new_beam.prev_beam_idx = prev_beam_idx
+					new_beam.score = score
+
+					new_beam.action_t = self.embeds(torch.LongTensor([tok_idx])).view(1, 1, -1)
+					new_beam.hidden_t = beamMatrix[-2][prev_beam_idx].next_hidden_t # next hidden
+					new_beam.token = tok_idx
+					new_beam.state = copy.deepcopy(beamMatrix[-2][prev_beam_idx].state) #state
+					self.cstn1.update(idx, new_beam.state)
+
+					beamMatrix[-1].append(new_beam)
+					b += 1
+
+			b = 0
+			step = len(beamMatrix) - 1
+			beam_idx = 0
+			hidden = beamMatrix[step][beam_idx].hidden_t
+			while True:
+				beam = beamMatrix[step][beam_idx]
+				if beam.token:
+					tokens.append(beam.token)
+					hidden_rep.apend(beam.output)
+				step -= 1
+				beam_idx = beam.prev_beam_idx
+				if step < 0:
+					break
+			return tokens[::-1], None, hidden
 
