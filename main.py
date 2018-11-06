@@ -86,9 +86,9 @@ def run_train(args):
 	#dev_output = read_output(args.dev_action)
 	train_action = tree2action(train_output, actn_v)
 	#dev_actoin, actn_v = output2action(dev_output, actn_v)
-	print train_action[0][0]
-	print train_action[0][1]
-	print train_action[0][2]
+	#print train_action[0][0]
+	#print train_action[0][1]
+	#print train_action[0][2]
 	print "word vocabulary size:", word_v.size()
 	word_v.dump(args.model_path_base+"/word.list")
 	print "char vocabulary size:", char_v.size()
@@ -199,7 +199,7 @@ def run_train(args):
 			if (type(tok) == types.StringType and tok[-1] == "(") or actn_v.totok(tok)[-1] == "(":
 				train_action_step3.append([hidden_rep_t[j], train_action[i][2][idx]])
 				idx += 1
-		print i, idx, len(train_action[i][2])
+		#print i, idx, len(train_action[i][2])
 		assert idx == len(train_action[i][2])
 		loss_t3, hidden_rep_t, hidden_step3 = decoder(train_action_step3, hidden_step3, enc_rep_t, train=True, constraints=None, opt=3)
 		check_loss3 += loss_t3.data.tolist()
