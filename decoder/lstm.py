@@ -177,26 +177,32 @@ class decoder(nn.Module):
 					constraint_t = constraint_t.cuda()
 
 				output, hidden = self.lstm(action_t, hidden)
+				#print output
 				hidden_reps.append(output)
 
 				copy_scores_t = torch.bmm(self.copy_matrix(output).transpose(0,1), encoder_rep_t.transpose(0,1).unsqueeze(0)).view(output.size(0), -1)
 				#copy_scores_t = torch.bmm(torch.bmm(output.transpose(0,1), self.copy_matrix), encoder_rep_t.transpose(0,1).unsqueeze(0)).view(output.size(0), -1)
-
+				#print copy_scores_t
 				attn_scores_t = torch.bmm(output.transpose(0,1), encoder_rep_t.transpose(0,1).unsqueeze(0))[0]
+				#print attn_scores_t
 				attn_weights_t = F.softmax(attn_scores_t, 1)
+				#print attn_weights_t
 				attn_hiddens_t = torch.bmm(attn_weights_t.unsqueeze(0),encoder_rep_t.unsqueeze(0))[0]
+				#print "attn_hiddens_t", attn_hiddens_t
 				feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((attn_hiddens_t, action_t.view(output.size(0),-1)), 1)))
+				#print "feat_hiddens_t", feat_hiddens_t
 				global_scores_t = self.out(feat_hiddens_t)
-
+				#print global_scores_t
 				total_score = torch.cat((global_scores_t, copy_scores_t), 1)
 
 				total_score = total_score + (constraint_t - 1) * 1e10
-
+				#print total_score.view(-1).data.tolist()
 				_, input_t = torch.max(total_score,1)
 
 				idx = input_t.view(-1).data.tolist()[0]
 				tokens.append(idx)
 				constraints.update(idx)
+				#print idx
 				if constraints.isterminal():
 					break
 
@@ -204,6 +210,7 @@ class decoder(nn.Module):
 					action_t = self.copy(encoder_rep_t[idx - self.action_size].view(1, 1, -1))
 				else:
 					action_t = self.embeds(input_t).view(1, 1, -1)
+					
 
 			return tokens, hidden_reps, hidden
 
@@ -252,6 +259,8 @@ class decoder(nn.Module):
 				constraint_t = torch.FloatTensor(constraint).unsqueeze(0)
 				if self.args.gpu:
 					constraint_t = constraint_t.cuda()
+				#print action_t
+				#print hidden
 				output, hidden = self.lstm(action_t, hidden)
 				#for i in range(len(constraint)):
                                 #        if constraint[i] == 1:
@@ -268,14 +277,14 @@ class decoder(nn.Module):
 				attn_hiddens_t = torch.bmm(attn_weights_t.unsqueeze(0),encoder_rep_t.unsqueeze(0))[0]
 				feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((attn_hiddens_t, action_t.view(output.size(0),-1)), 1)))
 				global_scores_t = self.out(feat_hiddens_t)
-
+				#print "global_scores_t", global_scores_t
 				score = global_scores_t + (constraint_t - 1) * 1e10
 				#print score
 				_, input_t = torch.max(score,1)
 				idx = input_t.view(-1).data.tolist()[0]
 				#print "MAX IDX", idx
 				tokens.append(idx)
-
+				#print idx
 				constraints.update(idx)
 
 				if constraints.isterminal():

@@ -410,6 +410,7 @@ def run_test(args):
 			cstns1.reset()
 			test_output_step1, test_hidden_rep_step1, test_hidden_step1 = decoder(actn_v.toidx("<START>"), test_hidden_step1, test_enc_rep_t, train=False, constraints=cstns1, opt=1)
 			#print [actn_v.totok(x) for x in test_output_step1]
+			#print test_hidden_rep_step1[1]
 
 			#step 2
 			test_output_step2 = []
@@ -423,8 +424,11 @@ def run_test(args):
 					one_test_output_step2, one_test_hidden_rep_step2, test_hidden_step2 = decoder(test_hidden_rep_step1[k+1], test_hidden_step2, test_enc_rep_t, train=False, constraints=cstns2, opt=2)
 					test_output_step2.append(one_test_output_step2)
 					test_hidden_rep_step2.append(one_test_hidden_rep_step2)
+					#print test_hidden_step2
+					#print one_test_hidden_rep_step2
+					#print test_hidden_step2
+					#exit(1)
 			#print test_output_step2
-
 			#step 3
 			k_scope = get_k_scope(test_output_step1, actn_v)
 			p_max = get_p_max(test_output_step1, actn_v)
@@ -449,8 +453,12 @@ def run_test(args):
 						#	print actn_v.totok(act2)
 							
 						cstns3.reset_relation(act2)
+						#print test_hidden_rep_step2[k][kk+1]
+						#print test_hidden_step3
+						#print "==============================="
 						one_test_output_step3, _, test_hidden_step3 = decoder(test_hidden_rep_step2[k][kk+1], test_hidden_step3, test_enc_rep_t, train=False, constraints=cstns3, opt=3)
 						test_output_step3.append(one_test_output_step3)
+						#exit(1)
 					k += 1
 			#print test_output_step3
 
