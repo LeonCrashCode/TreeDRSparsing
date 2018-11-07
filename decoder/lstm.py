@@ -134,7 +134,7 @@ class decoder(nn.Module):
 					attn_scores_t = torch.bmm(output.transpose(0,1), encoder_rep_t.transpose(0,1).unsqueeze(0))[0]
 					attn_weights_t = F.softmax(attn_scores_t, 1)
 					attn_hiddens_t = torch.bmm(attn_weights_t.unsqueeze(0),encoder_rep_t.unsqueeze(0))[0]
-					feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((attn_hiddens_t, action_t.view(output.size(0),-1)), 1)))
+					feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((attn_hiddens_t, beam.action_t.view(output.size(0),-1)), 1)))
 					global_scores_t = self.out(feat_hiddens_t)
 
 					constraint = self.cstn1.get_step_mask(beam.state)
@@ -299,19 +299,24 @@ class decoder(nn.Module):
 					all_terminal = False
 
 					output, next_hidden = self.lstm(beam.action_t, beam.hidden_t)
+					#print output
 					beam.output_t = output
 					beam.next_hidden_t = next_hidden
 
 
 					copy_scores_t = torch.bmm(self.copy_matrix(output).transpose(0,1), encoder_rep_t.transpose(0,1).unsqueeze(0)).view(output.size(0), -1)
 					#copy_scores_t = torch.bmm(torch.bmm(output.transpose(0,1), self.copy_matrix), encoder_rep_t.transpose(0,1).unsqueeze(0)).view(output.size(0), -1)
-
+					#print copy_scores_t
 					attn_scores_t = torch.bmm(output.transpose(0,1), encoder_rep_t.transpose(0,1).unsqueeze(0))[0]
+					#print attn_scores_t
 					attn_weights_t = F.softmax(attn_scores_t, 1)
+					#print attn_weights_t
 					attn_hiddens_t = torch.bmm(attn_weights_t.unsqueeze(0),encoder_rep_t.unsqueeze(0))[0]
-					feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((attn_hiddens_t, action_t.view(output.size(0),-1)), 1)))
+					#print "attn_hiddens_t", attn_hiddens_t
+					feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((attn_hiddens_t, beam.action_t.view(output.size(0),-1)), 1)))
+					#print "feat_hiddens_t", feat_hiddens_t
 					global_scores_t = self.out(feat_hiddens_t)
-
+					#print global_scores_t
 					total_score = torch.cat((global_scores_t, copy_scores_t), 1)
 
 					constraint = self.cstn2.get_step_mask(beam.state)
@@ -322,6 +327,7 @@ class decoder(nn.Module):
 					total_score = total_score + (constraint_t - 1) * 1e10
 
 					scores = total_score.view(-1).data.tolist()
+					#print scores
 					scores = [ [scores[i], i] for i in range(len(scores))]
 					scores.sort(reverse=True)
 
@@ -341,7 +347,7 @@ class decoder(nn.Module):
 				while b < len(tmp) and b < self.args.beam_size:
 					#print "===="
 					score, tok_idx, prev_beam_idx = tmp[b]
-
+					#print tok_idx
 					new_beam = Beam()
 					new_beam.prev_beam_idx = prev_beam_idx
 					new_beam.score = score
@@ -361,8 +367,8 @@ class decoder(nn.Module):
 							new_beam.action_t = self.embeds(input_t).view(1, 1, -1)
 						self.cstn2.update(tok_idx, new_beam.state)
 					#new_beam.show()
-					#self.cstn1._print_state(new_beam.state)
-
+					#self.cstn2._print_state(new_beam.state)
+					
 					beamMatrix[-1].append(new_beam)
 					b += 1
 				#if len(beamMatrix) == 2:
@@ -371,7 +377,7 @@ class decoder(nn.Module):
 			step = len(beamMatrix) - 1
 			beam_idx = 0
 			hidden = beamMatrix[step][beam_idx].hidden_t
-
+			state = beamMatrix[step][beam_idx].state
 			while True:
 				beam = beamMatrix[step][beam_idx]
 				if beam.token != -1:
@@ -381,7 +387,7 @@ class decoder(nn.Module):
 				beam_idx = beam.prev_beam_idx
 				if step <= 0:
 					break
-			return tokens[::-1], hidden_rep[::-1], hidden
+			return tokens[::-1], hidden_rep[::-1], hidden, [state.rel_g, state.d_rel_g]
 
 	def forward_3(self, input, hidden, encoder_rep_t, train, state):
 		if train:
@@ -453,6 +459,8 @@ class decoder(nn.Module):
 					all_terminal = False
 
 					#expand beam
+					#print beam.action_t
+					#print beam.hidden_t
 					output, next_hidden = self.lstm(beam.action_t, beam.hidden_t)
 					beam.output_t = output
 					beam.next_hidden_t = next_hidden
@@ -460,15 +468,16 @@ class decoder(nn.Module):
 					attn_scores_t = torch.bmm(output.transpose(0,1), encoder_rep_t.transpose(0,1).unsqueeze(0))[0]
 					attn_weights_t = F.softmax(attn_scores_t, 1)
 					attn_hiddens_t = torch.bmm(attn_weights_t.unsqueeze(0),encoder_rep_t.unsqueeze(0))[0]
-					feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((attn_hiddens_t, action_t.view(output.size(0),-1)), 1)))
+					feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((attn_hiddens_t, beam.action_t.view(output.size(0),-1)), 1)))
 					global_scores_t = self.out(feat_hiddens_t)
 
+					#print "global_scores_t", global_scores_t
 					constraint = self.cstn3.get_step_mask(beam.state)
 					constraint_t = torch.FloatTensor(constraint).unsqueeze(0)
 					if self.args.gpu:
 						constraint_t = constraint_t.cuda()
 					score_t = global_scores_t + (constraint_t - 1.0) * 1e10
-
+					#print score_t
 					scores = score_t.view(-1).data.tolist()
 					scores = [ [scores[i], i] for i in range(len(scores))]
 					scores.sort(reverse=True)
@@ -489,7 +498,7 @@ class decoder(nn.Module):
 				while b < len(tmp) and b < self.args.beam_size:
 					#print "===="
 					score, tok_idx, prev_beam_idx = tmp[b]
-					
+					#print tok_idx
 					new_beam = Beam()
 					new_beam.prev_beam_idx = prev_beam_idx
 					new_beam.score = score
@@ -516,6 +525,7 @@ class decoder(nn.Module):
 			step = len(beamMatrix) - 1
 			beam_idx = 0
 			hidden = beamMatrix[step][beam_idx].hidden_t
+			state = beamMatrix[step][beam_idx].state
 			while True:
 				beam = beamMatrix[step][beam_idx]
 				if beam.token != -1:
@@ -525,5 +535,5 @@ class decoder(nn.Module):
 				beam_idx = beam.prev_beam_idx
 				if step <= 0:
 					break
-			return tokens[::-1], None, hidden
+			return tokens[::-1], None, hidden, [state.x, state.e, state.s, state.t]
 

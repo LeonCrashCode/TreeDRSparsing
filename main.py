@@ -423,6 +423,7 @@ def run_test(args):
 			state_step1.reset()
 			test_output_step1, test_hidden_rep_step1, test_hidden_step1 = decoder(actn_v.toidx("<START>"), test_hidden_step1, test_enc_rep_t, train=False, state=state_step1, opt=1)
 			#print [actn_v.totok(x) for x in test_output_step1]
+			#print test_hidden_rep_step1[0]
 
 			#step 2
 			test_output_step2 = []
@@ -433,11 +434,17 @@ def run_test(args):
 				act1 = test_output_step1[k]
 				if actn_v.totok(act1) in ["DRS(", "SDRS("]:
 					state_step2.reset_condition(act1)
-					one_test_output_step2, one_test_hidden_rep_step2, test_hidden_step2 = decoder(test_hidden_rep_step1[k], test_hidden_step2, test_enc_rep_t, train=False, state=state_step2, opt=2)
+					one_test_output_step2, one_test_hidden_rep_step2, test_hidden_step2, partial_state = decoder(test_hidden_rep_step1[k], test_hidden_step2, test_enc_rep_t, train=False, state=state_step2, opt=2)
 					test_output_step2.append(one_test_output_step2)
 					test_hidden_rep_step2.append(one_test_hidden_rep_step2)
-			#print test_output_step2
+					#partial_state is to store how many relation it already has
+					state_step2.rel_g, state_step2.d_rel_g = partial_state
+					#print test_hidden_step2
 
+					#print one_test_hidden_rep_step2
+					#print test_hidden_step2
+					#exit(1)
+			#print test_output_step2
 			#step 3
 			k_scope = get_k_scope(test_output_step1, actn_v)
 			p_max = get_p_max(test_output_step1, actn_v)
@@ -462,8 +469,14 @@ def run_test(args):
 						#	print actn_v.totok(act2)
 							
 						state_step3.reset_relation(act2)
-						one_test_output_step3, _, test_hidden_step3 = decoder(test_hidden_rep_step2[k][kk], test_hidden_step3, test_enc_rep_t, train=False, state=state_step3, opt=3)
+						#print test_hidden_rep_step2[k][kk]
+						#print test_hidden_step3
+						#print "========================="
+						one_test_output_step3, _, test_hidden_step3, partial_state = decoder(test_hidden_rep_step2[k][kk], test_hidden_step3, test_enc_rep_t, train=False, state=state_step3, opt=3)
 						test_output_step3.append(one_test_output_step3)
+						#partial state is to store how many variable it already has
+						state_step3.x, state_step3.e, state_step3.s, state_step3.t = partial_state
+						#exit(1)
 					k += 1
 			#print test_output_step3
 
