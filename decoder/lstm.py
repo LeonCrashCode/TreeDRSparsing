@@ -178,7 +178,10 @@ class decoder(nn.Module):
 						new_beam.hidden_t = beamMatrix[-2][prev_beam_idx].hidden_t
 					else:
 						new_beam.hidden_t = beamMatrix[-2][prev_beam_idx].next_hidden_t # next hidden
-						new_beam.action_t = self.embeds(torch.LongTensor([tok_idx])).view(1, 1, -1)
+						input_t = torch.LongTensor([tok_idx])
+						if self.args.gpu:
+							input_t = input_t.cuda()
+						new_beam.action_t = self.embeds(input_t).view(1, 1, -1)
 						self.cstn1.update(tok_idx, new_beam.state)
 					#new_beam.show()
 					#self.cstn1._print_state(new_beam.state)
@@ -352,7 +355,10 @@ class decoder(nn.Module):
 						if tok_idx >= self.action_size:
 							new_beam.action_t = self.copy(encoder_rep_t[tok_idx - self.action_size].view(1, 1, -1))
 						else:
-							new_beam.action_t = self.embeds(torch.LongTensor([tok_idx])).view(1, 1, -1)
+							input_t = torch.LongTensor([tok_idx])
+							if self.args.gpu:
+								input_t = input_t.cuda()
+							new_beam.action_t = self.embeds(input_t).view(1, 1, -1)
 						self.cstn2.update(tok_idx, new_beam.state)
 					#new_beam.show()
 					#self.cstn1._print_state(new_beam.state)
@@ -494,7 +500,10 @@ class decoder(nn.Module):
 						new_beam.hidden_t = beamMatrix[-2][prev_beam_idx].hidden_t
 					else:
 						new_beam.hidden_t = beamMatrix[-2][prev_beam_idx].next_hidden_t # next hidden
-						new_beam.action_t = self.embeds(torch.LongTensor([tok_idx])).view(1, 1, -1)
+						input_t = torch.LongTensor([tok_idx])
+						if self.args.gpu:
+							input_t = input_t.cuda()
+						new_beam.action_t = self.embeds(input_t).view(1, 1, -1)
 						self.cstn3.update(tok_idx, new_beam.state)
 
 					#new_beam.show()
