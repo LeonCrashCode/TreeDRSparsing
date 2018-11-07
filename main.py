@@ -16,12 +16,12 @@ from decoder.lstm import decoder as dec
 
 from utils import get_k_scope
 from utils import get_p_max
-from constraints.constraints import struct_constraints as cstn_step1
-from constraints.constraints import struct_constraints_state as state_step1
-from constraints.constraints import relation_constraints as cstn_step2
-from constraints.constraints import relation_constraints_state as state_step2
-from constraints.constraints import variable_constraints as cstn_step3
-from constraints.constraints import variable_constraints_state as state_step3
+from constraints.constraints import struct_constraints
+from constraints.constraints import struct_constraints_state
+from constraints.constraints import relation_constraints
+from constraints.constraints import relation_constraints_state
+from constraints.constraints import variable_constraints
+from constraints.constraints import variable_constraints_state
 
 import torch
 from optimizer import optimizer
@@ -133,6 +133,9 @@ def run_train(args):
 			lines.append(line)
 
 	#mask = Mask(args, actn_v, starts, ends)
+	cstn_step1 = struct_constraints(actn_v, args)
+	cstn_step2 = relation_constraints(actn_v, args, starts, ends)
+	cstn_step3 = variable_constraints(actn_v, args)
 	decoder = dec(actn_v.size(), args, actn_v, [cstn_step1, cstn_step2, cstn_step3])
 
 	if args.gpu:
@@ -227,9 +230,9 @@ def run_train(args):
 		if check_iter % args.eval_per_update == 0:
 			torch.save({"encoder":encoder.state_dict(), "decoder":decoder.state_dict(), "input_representation": input_representation.state_dict()}, args.model_path_base+"/model"+str(int(check_iter/args.eval_per_update)))
 
-			cstns1 = [cstn_step1(actn_v, args) for b in range(args.beam_size)]
-			cstns2 = [cstn_step2(actn_v, args, starts, ends) for b in range(args.beam_size)]
-			cstns3 = [cstn_step3(actn_v, args) for b in range(args.beam_size)]
+			state_step1 = struct_constraints_state()
+			state_step2 = relation_constraints_state()
+			state_step3 = variable_constraints_state()
 			with open(args.dev_output_path_base+"/"+str(int(check_iter/args.eval_per_update)), "w") as w:
 				for j, instance in enumerate(dev_instance):
 					print j
@@ -238,53 +241,52 @@ def run_train(args):
 
 					#step 1
 					dev_hidden_step1 = (dev_hidden_t[0].view(args.action_n_layer, 1, -1), dev_hidden_t[1].view(args.action_n_layer, 1, -1))
-					for b in range(args.beam_size):
-						cstns1[b].reset()
-					dev_output_step1, dev_hidden_rep_step1, dev_hidden_step1 = decoder(actn_v.toidx("<START>"), dev_hidden_step1, dev_enc_rep_t, train=False, constraints=cstns1, opt=1)
-					#print dev_output_step1
-
+					state_step1.reset()
+					dev_output_step1, dev_hidden_rep_step1, dev_hidden_step1 = decoder(actn_v.toidx("<START>"), dev_hidden_step1, dev_enc_rep_t, train=False, state=state_step1, opt=1)
+					print dev_output_step1
+					#print [actn_v.totok(x) for x in dev_output_step1]
+					#print len(dev_output_step1), len(dev_hidden_rep_step1)
+					#print dev_hidden_rep_step1
 					#step 2
 					dev_output_step2 = []
 					dev_hidden_rep_step2 = []
 					dev_hidden_step2 = (dev_hidden_t[0].view(args.action_n_layer, 1, -1), dev_hidden_t[1].view(args.action_n_layer, 1, -1))
-					for b in range(args.beam_size):
-						cstns2[b].reset_length(len(instance[0])-2) # <s> </s>
+
+					state_step2.reset_length(len(instance[0])-2) # <s> </s>
 					for k in range(len(dev_output_step1)): # DRS( P1(
 						act1 = dev_output_step1[k]
 						if actn_v.totok(act1) in ["DRS(", "SDRS("]:
-							for b in range(args.beam_size):
-								cstns2[b].reset_condition(act1)
-							one_dev_output_step2, one_dev_hidden_rep_step2, dev_hidden_step2 = decoder(dev_hidden_rep_step1[k+1], dev_hidden_step2, dev_enc_rep_t, train=False, constraints=cstns2, state=None, opt=2)
+							#print "KKKK", k
+							state_step2.reset_condition(act1)
+							one_dev_output_step2, one_dev_hidden_rep_step2, dev_hidden_step2 = decoder(dev_hidden_rep_step1[k], dev_hidden_step2, dev_enc_rep_t, train=False, state=state_step2, opt=2)
 							dev_output_step2.append(one_dev_output_step2)
 							dev_hidden_rep_step2.append(one_dev_hidden_rep_step2)
-					#print dev_output_step2
-
+					
+					print dev_output_step2
+					#print dev_hidden_rep_step2[0]
+					#exit(1)
 					#step 3
 					k_scope = get_k_scope(dev_output_step1, actn_v)
 					p_max = get_p_max(dev_output_step1, actn_v)
 					dev_output_step3 = []
 					dev_hidden_step3 = (dev_hidden_t[0].view(args.action_n_layer, 1, -1), dev_hidden_t[1].view(args.action_n_layer, 1, -1))
-					for b in range(args.beam_size):
-						cstns3[b].reset(p_max)
+					state_step3.reset(p_max)
 					k = 0
 					sdrs_idx = 0
 					for act1 in dev_output_step1:
 						if actn_v.totok(act1) in ["DRS(", "SDRS("]:
 							if actn_v.totok(act1) == "SDRS(":
-								for b in range(args.beam_size):
-									cstns3[b].reset_condition(act1, k_scope[sdrs_idx])
+								state_step3.reset_condition(act1, k_scope[sdrs_idx])
 								sdrs_idx += 1
 							else:
-								for b in range(args.beam_size):
-									cstns3[b].reset_condition(act1)
+								state_step3.reset_condition(act1)
 							for kk in range(len(dev_output_step2[k])-1): # rel( rel( )
 								act2 = dev_output_step2[k][kk]
-								for b in range(args.beam_size):
-									cstns3[b].reset_relation(act2)
-								one_dev_output_step3, _, dev_hidden_step3 = decoder(dev_hidden_rep_step2[k][kk+1], dev_hidden_step3, dev_enc_rep_t, train=False, constraints=cstns3, opt=3)
+								state_step3.reset_relation(act2)
+								one_dev_output_step3, _, dev_hidden_step3 = decoder(dev_hidden_rep_step2[k][kk], dev_hidden_step3, dev_enc_rep_t, train=False, state=state_step3, opt=3)
 								dev_output_step3.append(one_dev_output_step3)
 							k += 1
-					#print dev_output_step3
+					print dev_output_step3
 
 					# write file
 					dev_output = []
@@ -305,7 +307,7 @@ def run_train(args):
 					w.write(" ".join(dev_output) + "\n")
 					w.flush()
 				w.close()
-			#exit(1)
+			exit(1)
 
 def run_test(args):
 	word_v = vocabulary()
@@ -388,7 +390,10 @@ def run_test(args):
 			lines.append(line)
 
 	#mask = Mask(args, actn_v, starts, ends)
-	decoder = dec(actn_v.size(), args, actn_v)
+	cstn_step1 = struct_constraints(actn_v, args)
+	cstn_step2 = relation_constraints(actn_v, args, starts, ends)
+	cstn_step3 = variable_constraints(actn_v, args)
+	decoder = dec(actn_v.size(), args, actn_v, [cstn_step1, cstn_step2, cstn_step3])
 
 	check_point = torch.load(args.model_path_base+"/model")
 	encoder.load_state_dict(check_point["encoder"])
@@ -404,9 +409,9 @@ def run_test(args):
 	
 	test_instance, word_v, char_v, extra_vl = input2instance(test_input, word_v, char_v, pretrain, extra_vl, {}, args, "dev")
 
-	cstns1 = cstn_step1(actn_v, args)
-	cstns2 = cstn_step2(actn_v, args, starts, ends)
-	cstns3 = cstn_step3(actn_v, args)
+	state_step1 = struct_constraints_state()
+	state_step2 = relation_constraints_state()
+	state_step3 = variable_constraints_state()
 	with open(args.test_output, "w") as w:
 		for j, instance in enumerate(test_instance):
 			print j
@@ -415,20 +420,20 @@ def run_test(args):
 
 			#step 1
 			test_hidden_step1 = (test_hidden_t[0].view(args.action_n_layer, 1, -1), test_hidden_t[1].view(args.action_n_layer, 1, -1))
-			cstns1.reset()
-			test_output_step1, test_hidden_rep_step1, test_hidden_step1 = decoder(actn_v.toidx("<START>"), test_hidden_step1, test_enc_rep_t, train=False, constraints=cstns1, opt=1)
+			state_step1.reset()
+			test_output_step1, test_hidden_rep_step1, test_hidden_step1 = decoder(actn_v.toidx("<START>"), test_hidden_step1, test_enc_rep_t, train=False, state=state_step1, opt=1)
 			#print [actn_v.totok(x) for x in test_output_step1]
 
 			#step 2
 			test_output_step2 = []
 			test_hidden_rep_step2 = []
 			test_hidden_step2 = (test_hidden_t[0].view(args.action_n_layer, 1, -1), test_hidden_t[1].view(args.action_n_layer, 1, -1))
-			cstns2.reset_length(len(instance[0])-2) # <s> </s>
+			state_step2.reset_length(len(instance[0])-2) # <s> </s>
 			for k in range(len(test_output_step1)): # DRS( P1(
 				act1 = test_output_step1[k]
 				if actn_v.totok(act1) in ["DRS(", "SDRS("]:
-					cstns2.reset_condition(act1)
-					one_test_output_step2, one_test_hidden_rep_step2, test_hidden_step2 = decoder(test_hidden_rep_step1[k+1], test_hidden_step2, test_enc_rep_t, train=False, constraints=cstns2, opt=2)
+					state_step2.reset_condition(act1)
+					one_test_output_step2, one_test_hidden_rep_step2, test_hidden_step2 = decoder(test_hidden_rep_step1[k], test_hidden_step2, test_enc_rep_t, train=False, state=state_step2, opt=2)
 					test_output_step2.append(one_test_output_step2)
 					test_hidden_rep_step2.append(one_test_hidden_rep_step2)
 			#print test_output_step2
@@ -439,16 +444,16 @@ def run_test(args):
 			
 			test_output_step3 = []
 			test_hidden_step3 = (test_hidden_t[0].view(args.action_n_layer, 1, -1), test_hidden_t[1].view(args.action_n_layer, 1, -1))
-			cstns3.reset(p_max)
+			state_step3.reset(p_max)
 			k = 0
 			sdrs_idx = 0
 			for act1 in test_output_step1:
 				if actn_v.totok(act1) in ["DRS(", "SDRS("]:
 					if actn_v.totok(act1) == "SDRS(":
-						cstns3.reset_condition(act1, k_scope[sdrs_idx])
+						state_step3.reset_condition(act1, k_scope[sdrs_idx])
 						sdrs_idx += 1
 					else:
-						cstns3.reset_condition(act1)
+						state_step3.reset_condition(act1)
 					for kk in range(len(test_output_step2[k])-1): # rel( rel( )
 						act2 = test_output_step2[k][kk]
 						#if act2 >= actn_v.size():
@@ -456,8 +461,8 @@ def run_test(args):
 						#else:
 						#	print actn_v.totok(act2)
 							
-						cstns3.reset_relation(act2)
-						one_test_output_step3, _, test_hidden_step3 = decoder(test_hidden_rep_step2[k][kk+1], test_hidden_step3, test_enc_rep_t, train=False, constraints=cstns3, opt=3)
+						state_step3.reset_relation(act2)
+						one_test_output_step3, _, test_hidden_step3 = decoder(test_hidden_rep_step2[k][kk], test_hidden_step3, test_enc_rep_t, train=False, state=state_step3, opt=3)
 						test_output_step3.append(one_test_output_step3)
 					k += 1
 			#print test_output_step3
@@ -518,7 +523,7 @@ def run_check(args):
 	train_output = read_tree(args.train_action)
 	#print train_output[0]
 	#dev_output = read_output(args.dev_action)
-	train_action = tree2action(train_output, actn_v)
+	train_action = tree2action(train_output, actn_v, [cstn_step1, cstn_step2, cstn_step3])
 	#dev_actoin, actn_v = output2action(dev_output, actn_v)
 	print "action vocaluary size:", actn_v.size()
 
@@ -675,7 +680,7 @@ if __name__ == "__main__":
 	subparser.add_argument("--dev-action", default="data/22.gold")
 	subparser.add_argument("--dev-output", default="data/22.auto.clean.notop")
 	subparser.add_argument("--batch-size", type=int, default=250)
-	subparser.add_argument("--beam-size", type=int, default=1)
+	subparser.add_argument("--beam-size", type=int, default=5)
 	subparser.add_argument("--check-per-update", type=int, default=1000)
 	subparser.add_argument("--eval-per-update", type=int, default=30000)
 	subparser.add_argument("--eval-path-base", default="EVALB")
@@ -694,6 +699,7 @@ if __name__ == "__main__":
 	subparser.add_argument("--test-output", required=True)
 	subparser.add_argument("--test-input", required=True)
 	subparser.add_argument("--pretrain-path")
+	subparser.add_argument("--beam-size", type=int, default=5)
 	subparser.add_argument("--action-dict-path", required=True)
 	subparser.add_argument("--use-char", action='store_true')
 	subparser.add_argument("--gpu", action='store_true')

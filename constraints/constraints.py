@@ -2,12 +2,14 @@ class struct_constraints_state:
 	def __init__(self):
 		self.reset()
 	def reset(self):
-		self.stack = [self.actn_v.toidx("<START>")]
+		self.stack = [0]
 		self.stack_ex = [[0 for i in range(2)]]
 
 		self.k = 0
 		self.p = 0
 		self.drs_c = 0
+
+		self.init = True
 
 class struct_constraints:
 	def __init__(self, actn_v, args):
@@ -37,7 +39,7 @@ class struct_constraints:
 		self.drs_offset = 1
 
 	def isterminal(self, state):
-		return len(state.stack) == 1
+		return len(state.stack) == 1 and state.init == False
 
 	def get_step_mask(self, state):
 		if state.stack[-1] == 0:
@@ -139,6 +141,7 @@ class struct_constraints:
 			self._assign(re, self.sep, self.sep, 1)
 		return re
 	def update(self, ix, state):
+		state.init = False
 		if ix in [self.DRS, self.SDRS, self.NOT, self.NEC, self.POS, self.IMP, self.DUP, self.OR]:
 			state.stack.append(ix)
 			if ix == self.DRS:
@@ -173,7 +176,7 @@ class struct_constraints:
 	def _print_state(self, state):
 		print "stack", [self.actn_v.totok(x) for x in state.stack]
 		print "stack_ex", state.stack_ex
-		print "kp", state.k, self.p
+		print "kp", state.k, state.p
 		print "drs", state.drs_c
 	def _get_one(self, size):
 		return [1 for i in range(size)]
@@ -192,7 +195,7 @@ class relation_constraints_state:
 		self.copy_length = copy_length
 		self.rel_g = 0
 		self.d_rel_g = 0
-	def reset_condition(self, cond)
+	def reset_condition(self, cond):
 		self.cond = cond
 		self.rel = 0
 		self.d_rel = 0
@@ -329,7 +332,7 @@ class variable_constraints:
 	def get_drs_mask(self, state):
 		if state.prev_v == -1:
 			re = self._get_zero(self.size)
-			self._assign_all_v(re)
+			self._assign_all_v(re, state)
 			if state.p_max >= 0:
 				self._assign(re, self.p_start, self.p_start + state.p_max, 1)
 			return re
@@ -340,7 +343,7 @@ class variable_constraints:
 			elif state.rel == self.TIME_b:
 				self._assign(re, self.TIME, self.TIME, 1)
 			else:
-				self._assign_all_v(re)
+				self._assign_all_v(re,state)
 				if state.p_max >= 0:
 					self._assign(re, self.p_start, self.p_start + state.p_max, 1)
 				self._assign(re, self.sep, self.sep, 1)

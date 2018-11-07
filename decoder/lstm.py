@@ -3,8 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import types
-
-class beam(self):
+import copy
+class Beam:
 	def __init__(self):
 		self.prev_beam_idx = None
 		self.score = None
@@ -17,6 +17,11 @@ class beam(self):
 		self.output_t = None
 		self.next_hidden_t = None
 
+	def show(self):
+		print "prev_beam_idx", self.prev_beam_idx
+		print "score", self.score
+		print "token", self.token
+		print "output_t", self.output_t
 class decoder(nn.Module):
 	def __init__(self, action_size, args, actn_v, constraints):
 		super(decoder, self).__init__()
@@ -103,20 +108,24 @@ class decoder(nn.Module):
 
 			beamMatrix = [[beam]]
 			all_terminal = False
-			while !all_terminal:
+			while not all_terminal:
+				#print "=======================", len(beamMatrix), "=================="
 				b = 0
 				all_terminal = True
+				tmp = []
 				while b < len(beamMatrix[-1]):
 					#pick a beam
 					beam = beamMatrix[-1][b]
 					#if the beam is terminal, directly extended without prediction 
+					#if self.cstn1.isterminal(beam.state):
+					#	tmp.append([beam.score, -1, b])
+					#	b += 1
+					#	continue
 					if self.cstn1.isterminal(beam.state):
 						tmp.append([beam.score, -1, b])
 						b += 1
 						continue
-
 					all_terminal = False
-
 					#expand beam
 					output, next_hidden = self.lstm(beam.action_t, beam.hidden_t)
 					beam.output_t = output
@@ -134,62 +143,62 @@ class decoder(nn.Module):
 						constraint_t = constraint_t.cuda()
 					score_t = global_scores_t + (constraint_t - 1.0) * 1e10
 
+					score_t = F.softmax(score_t, 1)
+
 					scores = score_t.view(-1).data.tolist()
 					scores = [ [scores[i], i] for i in range(len(scores))]
 					scores.sort(reverse=True)
-
 					for s in scores:
 						if constraint[s[-1]] == 0:
 							break
+						#print s[0],
 						average_s = ( s[0] + beam.score * (len(beamMatrix) - 1) ) / len(beamMatrix)
 						tmp.append([average_s, s[1], b]) #score tok_idx prev_beam_idx
-
+					b += 1
+				#print 
 				if all_terminal:
 					break
 
 				# candidates
 				tmp.sort(reverse=True)
+				#print tmp
 				b = 0
 				beamMatrix.append([])
 				while b < len(tmp) and b < self.args.beam_size:
 					score, tok_idx, prev_beam_idx = tmp[b]
-					if tok_idx == -1:
-						new_beam = Beam()
-						new_beam.prev_beam_idx = prev_beam_idx
-						new_beam.score = score
+					#print "===="
 
-						new_beam.hidden_t = beamMatrix[-2][prev_beam_idx].hidden_t
-						new_beam.state = beamMatrix[-2][prev_beam_idx].state
-
-						beamMatrix[-1].append(new_beam)
-						b += 1
-						continue
-					#input, tok_idx, hidden, state, prev_beam_idx, score
 					new_beam = Beam()
 					new_beam.prev_beam_idx = prev_beam_idx
 					new_beam.score = score
-
-					new_beam.action_t = self.embeds(torch.LongTensor([tok_idx])).view(1, 1, -1)
-					new_beam.hidden_t = beamMatrix[-2][prev_beam_idx].next_hidden_t # next hidden
 					new_beam.token = tok_idx
-					new_beam.state = copy.deepcopy(beamMatrix[-2][prev_beam_idx].state) #state
-					self.cstn1.update(idx, new_beam.state)
+					new_beam.state = copy.deepcopy(beamMatrix[-2][prev_beam_idx].state)
+
+					if self.cstn1.isterminal(beamMatrix[-2][prev_beam_idx].state):
+						new_beam.hidden_t = beamMatrix[-2][prev_beam_idx].hidden_t
+					else:
+						new_beam.hidden_t = beamMatrix[-2][prev_beam_idx].next_hidden_t # next hidden
+						new_beam.action_t = self.embeds(torch.LongTensor([tok_idx])).view(1, 1, -1)
+						self.cstn1.update(tok_idx, new_beam.state)
+					#new_beam.show()
+					#self.cstn1._print_state(new_beam.state)
 
 					beamMatrix[-1].append(new_beam)
 					b += 1
-
+				#if len(beamMatrix) == 5:
+				#	exit(1)
 			b = 0
 			step = len(beamMatrix) - 1
 			beam_idx = 0
 			hidden = beamMatrix[step][beam_idx].hidden_t
 			while True:
 				beam = beamMatrix[step][beam_idx]
-				if beam.token:
+				if beam.token != -1:
 					tokens.append(beam.token)
-					hidden_rep.apend(beam.output)
+					hidden_rep.append(beam.output_t)
 				step -= 1
 				beam_idx = beam.prev_beam_idx
-				if step < 0:
+				if step <= 0:
 					break
 			return tokens[::-1], hidden_rep[::-1], hidden
 
@@ -270,15 +279,16 @@ class decoder(nn.Module):
 
 			beamMatrix = [[beam]]
 			all_terminal = False
-			while !all_terminal:
-
+			while not all_terminal:
+				#print "=======================", len(beamMatrix), "=================="
 				b = 0
 				all_terminal = True
+				tmp = []
 				while b < len(beamMatrix[-1]):
 					#pick a beam
 					beam = beamMatrix[-1][b]
 					#if the beam is terminal, directly extended without prediction 
-					if self.cstn1.isterminal(beam.state):
+					if self.cstn2.isterminal(beam.state):
 						tmp.append([beam.score, -1, b])
 						b += 1
 						continue
@@ -317,7 +327,7 @@ class decoder(nn.Module):
 							break
 						average_s = ( s[0] + beam.score * (len(beamMatrix) - 1) ) / len(beamMatrix)
 						tmp.append([average_s, s[1], b]) #score tok_idx prev_beam_idx
-
+					b += 1
 				if all_terminal:
 					break
 
@@ -326,50 +336,46 @@ class decoder(nn.Module):
 				b = 0
 				beamMatrix.append([])
 				while b < len(tmp) and b < self.args.beam_size:
+					#print "===="
 					score, tok_idx, prev_beam_idx = tmp[b]
-					if tok_idx == -1:
-						new_beam = Beam()
-						new_beam.prev_beam_idx = prev_beam_idx
-						new_beam.score = score
 
-						new_beam.hidden_t = beamMatrix[-2][prev_beam_idx].hidden_t
-						new_beam.state = beamMatrix[-2][prev_beam_idx].state
-
-						beamMatrix[-1].append(new_beam)
-						b += 1
-						continue
-					#input, tok_idx, hidden, state, prev_beam_idx, score
 					new_beam = Beam()
 					new_beam.prev_beam_idx = prev_beam_idx
 					new_beam.score = score
-
-					if tok_idx >= self.action_size:
-						new_beam.action_t = self.copy(encoder_rep_t[tok_idx - self.action_size].view(1, 1, -1))
-					else:
-						new_beam.action_t = self.embeds(torch.LongTensor([tok_idx])).view(1, 1, -1)
-
-					new_beam.hidden_t = beamMatrix[-2][prev_beam_idx].next_hidden_t # next hidden
 					new_beam.token = tok_idx
-					new_beam.state = copy.deepcopy(beamMatrix[-2][prev_beam_idx].state) #state
-					self.cstn1.update(idx, new_beam.state)
+					new_beam.state = copy.deepcopy(beamMatrix[-2][prev_beam_idx].state)
+
+					if self.cstn2.isterminal(beamMatrix[-2][prev_beam_idx].state):
+						new_beam.hidden_t = beamMatrix[-2][prev_beam_idx].hidden_t
+					else:
+						new_beam.hidden_t = beamMatrix[-2][prev_beam_idx].next_hidden_t # next hidden
+						if tok_idx >= self.action_size:
+							new_beam.action_t = self.copy(encoder_rep_t[tok_idx - self.action_size].view(1, 1, -1))
+						else:
+							new_beam.action_t = self.embeds(torch.LongTensor([tok_idx])).view(1, 1, -1)
+						self.cstn2.update(tok_idx, new_beam.state)
+					#new_beam.show()
+					#self.cstn1._print_state(new_beam.state)
 
 					beamMatrix[-1].append(new_beam)
 					b += 1
-
+				#if len(beamMatrix) == 2:
+				#	exit(1)
 			b = 0
 			step = len(beamMatrix) - 1
 			beam_idx = 0
 			hidden = beamMatrix[step][beam_idx].hidden_t
+
 			while True:
 				beam = beamMatrix[step][beam_idx]
-				if beam.token:
+				if beam.token != -1:
 					tokens.append(beam.token)
-					hidden_rep.apend(beam.output)
+					hidden_rep.append(beam.output_t)
 				step -= 1
 				beam_idx = beam.prev_beam_idx
-				if step < 0:
+				if step <= 0:
 					break
-			return tokens[::-1], hidden_reps[::-1], hidden
+			return tokens[::-1], hidden_rep[::-1], hidden
 
 	def forward_3(self, input, hidden, encoder_rep_t, train, state):
 		if train:
@@ -410,7 +416,7 @@ class decoder(nn.Module):
 		else:
 			self.lstm.dropout = 0.0
 			tokens = []
-			hidden_rep = []
+			#hidden_rep = []
 
 			action_t = self.rel2var(input).view(1, 1,-1)
 
@@ -419,19 +425,21 @@ class decoder(nn.Module):
 			beam.score = 0
 
 			beam.action_t = action_t
-			beam.hidden_t = hidden_t
+			beam.hidden_t = hidden
 			beam.state = state
 
 			beamMatrix = [[beam]]
 			all_terminal = False
-			while !all_terminal:
+			while not all_terminal:
+				#print "=======================", len(beamMatrix), "=================="
 				b = 0
 				all_terminal = True
+				tmp = []
 				while b < len(beamMatrix[-1]):
 					#pick a beam
 					beam = beamMatrix[-1][b]
 					#if the beam is terminal, directly extended without prediction 
-					if self.cstn1.isterminal(beam.state):
+					if self.cstn3.isterminal(beam.state):
 						tmp.append([beam.score, -1, b])
 						b += 1
 						continue
@@ -464,7 +472,7 @@ class decoder(nn.Module):
 							break
 						average_s = ( s[0] + beam.score * (len(beamMatrix) - 1) ) / len(beamMatrix)
 						tmp.append([average_s, s[1], b]) #score tok_idx prev_beam_idx
-
+					b += 1
 				if all_terminal:
 					break
 
@@ -473,28 +481,24 @@ class decoder(nn.Module):
 				b = 0
 				beamMatrix.append([])
 				while b < len(tmp) and b < self.args.beam_size:
+					#print "===="
 					score, tok_idx, prev_beam_idx = tmp[b]
-					if tok_idx == -1:
-						new_beam = Beam()
-						new_beam.prev_beam_idx = prev_beam_idx
-						new_beam.score = score
-
-						new_beam.hidden_t = beamMatrix[-2][prev_beam_idx].hidden_t
-						new_beam.state = beamMatrix[-2][prev_beam_idx].state
-
-						beamMatrix[-1].append(new_beam)
-						b += 1
-						continue
-					#input, tok_idx, hidden, state, prev_beam_idx, score
+					
 					new_beam = Beam()
 					new_beam.prev_beam_idx = prev_beam_idx
 					new_beam.score = score
-
-					new_beam.action_t = self.embeds(torch.LongTensor([tok_idx])).view(1, 1, -1)
-					new_beam.hidden_t = beamMatrix[-2][prev_beam_idx].next_hidden_t # next hidden
 					new_beam.token = tok_idx
-					new_beam.state = copy.deepcopy(beamMatrix[-2][prev_beam_idx].state) #state
-					self.cstn1.update(idx, new_beam.state)
+					new_beam.state = copy.deepcopy(beamMatrix[-2][prev_beam_idx].state)
+
+					if self.cstn3.isterminal(beamMatrix[-2][prev_beam_idx].state):
+						new_beam.hidden_t = beamMatrix[-2][prev_beam_idx].hidden_t
+					else:
+						new_beam.hidden_t = beamMatrix[-2][prev_beam_idx].next_hidden_t # next hidden
+						new_beam.action_t = self.embeds(torch.LongTensor([tok_idx])).view(1, 1, -1)
+						self.cstn3.update(tok_idx, new_beam.state)
+
+					#new_beam.show()
+					#self.cstn3.__print_state(new_beam.state)
 
 					beamMatrix[-1].append(new_beam)
 					b += 1
@@ -505,12 +509,12 @@ class decoder(nn.Module):
 			hidden = beamMatrix[step][beam_idx].hidden_t
 			while True:
 				beam = beamMatrix[step][beam_idx]
-				if beam.token:
+				if beam.token != -1:
 					tokens.append(beam.token)
-					hidden_rep.apend(beam.output)
+					#hidden_rep.apend(beam.output_t)
 				step -= 1
 				beam_idx = beam.prev_beam_idx
-				if step < 0:
+				if step <= 0:
 					break
 			return tokens[::-1], None, hidden
 
