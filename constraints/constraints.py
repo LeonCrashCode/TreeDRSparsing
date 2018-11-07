@@ -57,7 +57,7 @@ class struct_constraints:
 		elif state.stack[-1] in [self.OR, self.IMP, self.DUP]:
 			#or, imp, duplex
 			return self._get_2_mask(state)
-		elif state.stack[-1] == self.kb_start or self.stack[-1] == self.pb_start:
+		elif state.stack[-1] == self.kb_start or state.stack[-1] == self.pb_start:
 			#k p
 			return self._get_1_mask(state)
 		else:
