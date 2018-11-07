@@ -206,7 +206,7 @@ def get_struct_rel_var(tree, actn_v):
 				#	relation[-1].append(actn_v.toidx(parent))
 				
 		else:
-			print parent
+			print(parent)
 			assert False
 	
 	travel(tree)
