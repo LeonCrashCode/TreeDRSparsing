@@ -29,9 +29,9 @@ import sys
 def run_train(args):
 	system_check_and_init(args)
 	if args.gpu:
-		print "GPU available"
+		print("GPU available")
 	else:
-		print "CPU only"
+		print("CPU only")
 
 	word_v = vocabulary()
 	char_v = vocabulary()
@@ -89,18 +89,18 @@ def run_train(args):
 	#print train_action[0][0]
 	#print train_action[0][1]
 	#print train_action[0][2]
-	print "word vocabulary size:", word_v.size()
+	print("word vocabulary size:", word_v.size())
 	word_v.dump(args.model_path_base+"/word.list")
-	print "char vocabulary size:", char_v.size()
+	print("char vocabulary size:", char_v.size())
 	if args.use_char:
 		char_v.dump(args.model_path_base+"/char.list")
-	print "pretrain vocabulary size:", pretrain.size()
+	print("pretrain vocabulary size:", pretrain.size())
 	extra_vl_size = []
 	for i in range(len(extra_vl)):
-		print "extra", i, "vocabulary size:", extra_vl[i].size()
+		print("extra", i, "vocabulary size:", extra_vl[i].size())
 		extra_vl[i].dump(args.model_path_base+"/extra."+str(i+1)+".list")
 		extra_vl_size.append(extra_vl[i].size())
-	print "action vocaluary size:", actn_v.size()
+	print("action vocaluary size:", actn_v.size())
 	
 	#actn_v.dump()
 
@@ -231,7 +231,7 @@ def run_train(args):
 			cstns3 = cstn_step3(actn_v, args)
 			with open(args.dev_output_path_base+"/"+str(int(check_iter/args.eval_per_update)), "w") as w:
 				for j, instance in enumerate(dev_instance):
-					print j
+					print(j)
 					dev_input_t = input_representation(instance, singleton_idx_dict=None, train=False)
 					dev_enc_rep_t, dev_hidden_t= encoder(dev_input_t, dev_comb[j], train=False)
 
@@ -345,14 +345,14 @@ def run_test(args):
 		extra_vl[i].read_file(args.model_path_base+"/extra."+str(i+1)+".list")
 		extra_vl[i].freeze()
 
-	print "word vocabulary size:", word_v.size()
-	print "char vocabulary size:", char_v.size() 
-	print "pretrain vocabulary size:", pretrain.size()
+	print("word vocabulary size:", word_v.size())
+	print("char vocabulary size:", char_v.size())
+	print("pretrain vocabulary size:", pretrain.size())
 	extra_vl_size = []
 	for i in range(len(extra_vl)):
-		print "extra", i, "vocabulary size:", extra_vl[i].size()
+		print("extra", i, "vocabulary size:", extra_vl[i].size())
 		extra_vl_size.append(extra_vl[i].size())
-	print "action vocaluary size:", actn_v.size() 
+	print("action vocaluary size:", actn_v.size())
 
 	input_representation = sentence_rep(word_v.size(), char_v.size(), pretrain, extra_vl_size, args)
 	encoder = None
@@ -401,7 +401,7 @@ def run_test(args):
 	cstns3 = cstn_step3(actn_v, args)
 	with open(args.test_output, "w") as w:
 		for j, instance in enumerate(test_instance):
-			print j
+			print(j)
 			test_input_t = input_representation(instance, singleton_idx_dict=None, train=False)
 			test_enc_rep_t, test_hidden_t= encoder(test_input_t, test_comb[j], train=False)
 
@@ -509,9 +509,9 @@ def run_check(args):
 	actn_v.toidx("TIME_NUMBER")
 	actn_v.toidx(")")
 
-	print actn_v.size()
+	print(actn_v.size())
 	actn_v.read_file(args.action_dict_path)
-	print actn_v.size()
+	print(actn_v.size())
 	actn_v.freeze()
 
 	train_input = read_input(args.train_input)
@@ -520,7 +520,7 @@ def run_check(args):
 	#dev_output = read_output(args.dev_action)
 	train_action = tree2action(train_output, actn_v)
 	#dev_actoin, actn_v = output2action(dev_output, actn_v)
-	print "action vocaluary size:", actn_v.size()
+	print("action vocaluary size:", actn_v.size())
 
 	#check dict to get index
 	#BOX DISCOURSE RELATION PREDICATE CONSTANT
@@ -552,7 +552,7 @@ def run_check(args):
 
 		#print action_step2
 		line += 1
-		print line
+		print(line)
 		cstns1.reset()
 		#processed_act = []
 		idx = 0
