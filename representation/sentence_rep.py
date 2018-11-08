@@ -7,6 +7,7 @@ class sentence_rep(nn.Module):
 	def __init__(self, word_size, char_size, pretrain, extra_vl_size, args):
 		super(sentence_rep,self).__init__()
 		self.args = args
+		self.pretrain = pretrain
 		self.word_embeds = nn.Embedding(word_size, args.word_dim)
 		info_dim = args.word_dim
 		if args.use_char:
@@ -14,8 +15,6 @@ class sentence_rep(nn.Module):
 			self.lstm = nn.LSTM(args.char_dim, args.char_hidden_dim, num_layers=args.char_n_layer, bidirectional=True)
 			info_dim += args.char_hidden_dim*2*3
 		if args.pretrain_path:
-			self.pretrain_embeds = nn.Embedding(pretrain.size(), args.pretrain_dim)
-			self.pretrain_embeds.weight = nn.Parameter(torch.FloatTensor(pretrain.vectors()), False)
 			info_dim += args.pretrain_dim
 		if args.extra_dim_list:
 			dims = args.extra_dim_list.split(",")
@@ -87,10 +86,10 @@ class sentence_rep(nn.Module):
 			word_t = torch.cat((word_t, char_t), 1)
 		#print word_t, word_t.size()
 		if self.args.pretrain_path:
-			pretrain_t = torch.LongTensor(instance[2])
+			pretrain_vector = self.pretrain.query(instance[2]) 
+			pretrain_t = torch.LongTensor(pretrain_vector, require_grad=False)
 			if self.args.gpu:
 				pretrain_t = pretrain_t.cuda()
-			pretrain_t = self.pretrain_embeds(pretrain_t)
 			word_t = torch.cat((word_t, pretrain_t), 1)
 		#print word_t, word_t.size()
 		if self.args.extra_dim_list:

@@ -8,7 +8,8 @@ from utils import tree2action as tree2action
 from utils import get_same_lemma
 
 from dictionary.vocabulary import vocabulary
-from dictionary.PretrainedEmb import PretrainedEmb
+#from dictionary.PretrainedEmb import PretrainedEmb
+from pymagnitude import Magnitude
 from representation.sentence_rep import sentence_rep
 
 from encoder.bilstm import comb_encoder as enc 
@@ -36,7 +37,7 @@ def run_train(args):
 	word_v = vocabulary()
 	char_v = vocabulary()
 	actn_v = vocabulary(UNK=False)
-	pretrain = PretrainedEmb(args.pretrain_path)
+	pretrain = Magnitude(args.pretrain_path)
 
 	actn_v.toidx("<START>")
 	actn_v.toidx("<END>")
@@ -74,12 +75,12 @@ def run_train(args):
 
 	singleton_idx_dict, word_dict, word_v = get_singleton_dict(train_input, word_v)
 	extra_vl = [ vocabulary() for i in range(len(train_input[0])-1)]	
-	train_instance, word_v, char_v, extra_vl = input2instance(train_input, word_v, char_v, pretrain, extra_vl, word_dict, args, "train")
+	train_instance, word_v, char_v, extra_vl = input2instance(train_input, word_v, char_v, extra_vl, word_dict, args, "train")
 	word_v.freeze()
 	char_v.freeze()
 	for i in range(len(extra_vl)):
 		extra_vl[i].freeze()
-	dev_instance, word_v, char_v, extra_vl = input2instance(dev_input, word_v, char_v, pretrain, extra_vl, {}, args, "dev")
+	dev_instance, word_v, char_v, extra_vl = input2instance(dev_input, word_v, char_v, extra_vl, {}, args, "dev")
 
 	train_output = read_tree(args.train_action)
 	#print train_output[0]
@@ -94,7 +95,7 @@ def run_train(args):
 	print("char vocabulary size:", char_v.size())
 	if args.use_char:
 		char_v.dump(args.model_path_base+"/char.list")
-	print("pretrain vocabulary size:", pretrain.size())
+	print("pretrain vocabulary size:", len(pretrain))
 	extra_vl_size = []
 	for i in range(len(extra_vl)):
 		print("extra", i, "vocabulary size:", extra_vl[i].size())
@@ -310,7 +311,7 @@ def run_test(args):
 		char_v.freeze()
 
 	actn_v = vocabulary(UNK=False)
-	pretrain = PretrainedEmb(args.pretrain_path)
+	pretrain = Magnitude(args.pretrain_path)
 
 	actn_v.toidx("<START>")
 	actn_v.toidx("<END>")
@@ -347,7 +348,7 @@ def run_test(args):
 
 	print("word vocabulary size:", word_v.size())
 	print("char vocabulary size:", char_v.size())
-	print("pretrain vocabulary size:", pretrain.size())
+	print("pretrain vocabulary size:", len(pretrain))
 	extra_vl_size = []
 	for i in range(len(extra_vl)):
 		print("extra", i, "vocabulary size:", extra_vl[i].size())
