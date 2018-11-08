@@ -86,8 +86,11 @@ class sentence_rep(nn.Module):
 			word_t = torch.cat((word_t, char_t), 1)
 		#print word_t, word_t.size()
 		if self.args.pretrain_path:
-			pretrain_vector = self.pretrain.query(instance[2]) 
-			pretrain_t = torch.LongTensor(pretrain_vector, require_grad=False)
+			#pretrain_vector = self.pretrain.query(instance[2])
+			pretrain_vector = []
+			for item in instance[2]:
+				pretrain_vector.append(self.pretrain[item]) 
+			pretrain_t = torch.LongTensor(pretrain_vector, requires_grad=False)
 			if self.args.gpu:
 				pretrain_t = pretrain_t.cuda()
 			word_t = torch.cat((word_t, pretrain_t), 1)
