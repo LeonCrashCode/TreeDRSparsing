@@ -9,7 +9,7 @@ from utils import get_same_lemma
 
 from dictionary.vocabulary import vocabulary
 #from dictionary.PretrainedEmb import PretrainedEmb
-from pymagnitude import Magnitude
+#from pymagnitude import Magnitude
 from representation.sentence_rep import sentence_rep
 
 from encoder.bilstm import comb_encoder as enc 
@@ -37,7 +37,11 @@ def run_train(args):
 	word_v = vocabulary()
 	char_v = vocabulary()
 	actn_v = vocabulary(UNK=False)
-	pretrain = Magnitude(args.pretrain_path)
+	#pretrain = Magnitude(args.pretrain_path)
+	pretrain = {}
+	for line in open(args.pretrain_path):
+		line = line.strip().split()
+		pretrain[line[0]] = [float(x) for x in line[1:]]
 
 	actn_v.toidx("<START>")
 	actn_v.toidx("<END>")
@@ -311,7 +315,11 @@ def run_test(args):
 		char_v.freeze()
 
 	actn_v = vocabulary(UNK=False)
-	pretrain = Magnitude(args.pretrain_path)
+	#pretrain = Magnitude(args.pretrain_path)
+	pretrain = {}
+        for line in open(args.pretrain_path):
+                line = line.strip().split()
+                pretrain[line[0]] = [float(x) for x in line[1:]]
 
 	actn_v.toidx("<START>")
 	actn_v.toidx("<END>")
