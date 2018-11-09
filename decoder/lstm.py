@@ -196,6 +196,7 @@ class decoder(nn.Module):
 				total_score = torch.cat((global_scores_t, copy_scores_t), 1)
 
 				total_score = total_score + (constraint_t - 1) * 1e10
+				#print total_score
 				#print total_score.view(-1).data.tolist()
 				_, input_t = torch.max(total_score,1)
 

@@ -411,7 +411,7 @@ def run_test(args):
 			test_output_step1, test_hidden_rep_step1, test_hidden_step1 = decoder(actn_v.toidx("<START>"), test_hidden_step1, test_enc_rep_t, train=False, constraints=cstns1, opt=1)
 			#print [actn_v.totok(x) for x in test_output_step1]
 			#print test_hidden_rep_step1[1]
-
+			#exit(1)
 			#step 2
 			test_output_step2 = []
 			test_hidden_rep_step2 = []
