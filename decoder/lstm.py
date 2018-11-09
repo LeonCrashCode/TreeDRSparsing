@@ -143,7 +143,7 @@ class decoder(nn.Module):
 						constraint_t = constraint_t.cuda()
 					score_t = global_scores_t + (constraint_t - 1.0) * 1e10
 		
-					#score_t = F.softmax(score_t, 1)
+					score_t = F.softmax(score_t, 1)
 
 					scores = score_t.view(-1).data.tolist()
 					scores = [ [scores[i], i] for i in range(len(scores))]
@@ -326,6 +326,7 @@ class decoder(nn.Module):
 
 					total_score = total_score + (constraint_t - 1) * 1e10
 					#print total_score
+					total_score = F.softmax(total_score, 1)
 					scores = total_score.view(-1).data.tolist()
 					#print scores
 					scores = [ [scores[i], i] for i in range(len(scores))]
@@ -478,6 +479,7 @@ class decoder(nn.Module):
 						constraint_t = constraint_t.cuda()
 					score_t = global_scores_t + (constraint_t - 1.0) * 1e10
 					#print score_t
+					score_t = F.softmax(score_t, 1)
 					scores = score_t.view(-1).data.tolist()
 					scores = [ [scores[i], i] for i in range(len(scores))]
 					scores.sort(reverse=True)
