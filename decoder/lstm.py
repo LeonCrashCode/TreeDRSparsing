@@ -108,6 +108,7 @@ class decoder(nn.Module):
 
 			beamMatrix = [[beam]]
 			all_terminal = False
+			bracket = 0
 			while not all_terminal:
 				#print "=======================", len(beamMatrix), "=================="
 				b = 0
@@ -121,7 +122,7 @@ class decoder(nn.Module):
 					#	tmp.append([beam.score, -1, b])
 					#	b += 1
 					#	continue
-					if self.cstn1.isterminal(beam.state):
+					if self.cstn1.isterminal(beam.state) or (len(beamMatrix) > 1 and bracket == 0) or len(beamMatrix) > 200:
 						tmp.append([beam.score, -1, b])
 						b += 1
 						continue
@@ -137,19 +138,22 @@ class decoder(nn.Module):
 					feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((attn_hiddens_t, beam.action_t.view(output.size(0),-1)), 1)))
 					global_scores_t = self.out(feat_hiddens_t)
 
-					constraint = self.cstn1.get_step_mask(beam.state)
-					constraint_t = torch.FloatTensor(constraint).unsqueeze(0)
-					if self.args.gpu:
-						constraint_t = constraint_t.cuda()
-					score_t = global_scores_t + (constraint_t - 1.0) * 1e10
-		
+
+					score_t = global_scores_t
+					if self.args.struct_constraints:
+						constraint = self.cstn1.get_step_mask(beam.state)
+                                        	constraint_t = torch.FloatTensor(constraint).unsqueeze(0)
+                                        	if self.args.gpu:
+                                                	constraint_t = constraint_t.cuda()
+						score_t = global_scores_t + (constraint_t - 1.0) * 1e10
+					
 					#score_t = F.softmax(score_t, 1)
 
 					scores = score_t.view(-1).data.tolist()
 					scores = [ [scores[i], i] for i in range(len(scores))]
 					scores.sort(reverse=True)
 					for s in scores:
-						if constraint[s[-1]] == 0:
+						if self.args.struct_constraints and constraint[s[-1]] == 0:
 							break
 						#print s[0],
 						average_s = ( s[0] + beam.score * (len(beamMatrix) - 1) ) / len(beamMatrix)
@@ -166,6 +170,10 @@ class decoder(nn.Module):
 				beamMatrix.append([])
 				while b < len(tmp) and b < self.args.beam_size:
 					score, tok_idx, prev_beam_idx = tmp[b]
+					if self.actn_v.totok(tok_idx) == ")":
+						bracket -= 1
+					else:
+						bracket += 1
 					#print "===="
 
 					new_beam = Beam()
@@ -182,7 +190,8 @@ class decoder(nn.Module):
 						if self.args.gpu:
 							input_t = input_t.cuda()
 						new_beam.action_t = self.embeds(input_t).view(1, 1, -1)
-						self.cstn1.update(tok_idx, new_beam.state)
+						if self.args.struct_constraints:
+							self.cstn1.update(tok_idx, new_beam.state)
 					#new_beam.show()
 					#self.cstn1._print_state(new_beam.state)
 
@@ -291,7 +300,7 @@ class decoder(nn.Module):
 					#pick a beam
 					beam = beamMatrix[-1][b]
 					#if the beam is terminal, directly extended without prediction 
-					if self.cstn2.isterminal(beam.state):
+					if self.cstn2.isterminal(beam.state) or len(beamMatrix) > 200:
 						tmp.append([beam.score, -1, b])
 						b += 1
 						continue
@@ -319,12 +328,12 @@ class decoder(nn.Module):
 					#print global_scores_t
 					total_score = torch.cat((global_scores_t, copy_scores_t), 1)
 
-					constraint = self.cstn2.get_step_mask(beam.state)
-					constraint_t = torch.FloatTensor(constraint).unsqueeze(0)
-					if self.args.gpu:
-						constraint_t = constraint_t.cuda()
-
-					total_score = total_score + (constraint_t - 1) * 1e10
+					if self.args.rel_constraints:
+						constraint = self.cstn2.get_step_mask(beam.state)
+                                        	constraint_t = torch.FloatTensor(constraint).unsqueeze(0)
+                                        	if self.args.gpu:
+                                                	constraint_t = constraint_t.cuda()
+						total_score = total_score + (constraint_t - 1) * 1e10
 					#print total_score
 					#total_score = F.softmax(total_score, 1)
 					scores = total_score.view(-1).data.tolist()
@@ -333,7 +342,7 @@ class decoder(nn.Module):
 					scores.sort(reverse=True)
 
 					for s in scores:
-						if constraint[s[-1]] == 0:
+						if self.args.rel_constraints and constraint[s[-1]] == 0:
 							break
 						average_s = ( s[0] + beam.score * (len(beamMatrix) - 1) ) / len(beamMatrix)
 						tmp.append([average_s, s[1], b]) #score tok_idx prev_beam_idx
@@ -452,7 +461,7 @@ class decoder(nn.Module):
 					#pick a beam
 					beam = beamMatrix[-1][b]
 					#if the beam is terminal, directly extended without prediction 
-					if self.cstn3.isterminal(beam.state):
+					if self.cstn3.isterminal(beam.state) or len(beamMatrix) > 5:
 						tmp.append([beam.score, -1, b])
 						b += 1
 						continue
@@ -473,11 +482,14 @@ class decoder(nn.Module):
 					global_scores_t = self.out(feat_hiddens_t)
 
 					#print "global_scores_t", global_scores_t
-					constraint = self.cstn3.get_step_mask(beam.state)
-					constraint_t = torch.FloatTensor(constraint).unsqueeze(0)
-					if self.args.gpu:
-						constraint_t = constraint_t.cuda()
-					score_t = global_scores_t + (constraint_t - 1.0) * 1e10
+
+					score_t = global_scores_t
+					if self.args.var_constraints:
+						constraint = self.cstn3.get_step_mask(beam.state)
+                                        	constraint_t = torch.FloatTensor(constraint).unsqueeze(0)
+                                        	if self.args.gpu:
+                                                	constraint_t = constraint_t.cuda()
+						score_t = global_scores_t + (constraint_t - 1.0) * 1e10
 					#print score_t
 					#score_t = F.softmax(score_t, 1)
 					scores = score_t.view(-1).data.tolist()
@@ -485,7 +497,7 @@ class decoder(nn.Module):
 					scores.sort(reverse=True)
 
 					for s in scores:
-						if constraint[s[-1]] == 0:
+						if self.args.var_constraints and constraint[s[-1]] == 0:
 							break
 						average_s = ( s[0] + beam.score * (len(beamMatrix) - 1) ) / len(beamMatrix)
 						tmp.append([average_s, s[1], b]) #score tok_idx prev_beam_idx
