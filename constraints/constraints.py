@@ -228,7 +228,7 @@ class relation_constraints:
 					self._assign(re, self.starts[RELATION], self.ends[RELATION], 1)
 					self._assign(re, self.starts[PREDICATE], self.ends[PREDICATE], 1)
 					self._assign(re, self.size, self.size+self.copy_length-1, 1)
-				self._assign(re, self.sep, self.sep, 1)
+			self._assign(re, self.sep, self.sep, 1)
 		elif self.cond == self.SDRS:
 			if self.d_rel == 0:
 				self._assign(re, self.starts[DISCOURSE], self.ends[DISCOURSE], 1)
