@@ -209,8 +209,9 @@ class relation_constraints_state:
 		self.copy_length = copy_length
 		self.rel_g = 0
 		self.d_rel_g = 0
-	def reset_condition(self, cond):
+	def reset_condition(self, cond, cond2):
 		self.cond = cond
+		self.cond2 = cond2
 		self.rel = 0
 		self.d_rel = 0
 		self.sep_exist = False
@@ -243,12 +244,16 @@ class relation_constraints:
 				self._assign(re, self.starts[RELATION], self.ends[RELATION], 1)
 				self._assign(re, self.starts[PREDICATE], self.ends[PREDICATE], 1)
 				self._assign(re, self.size, self.size+state.copy_length-1, 1)
+				if state.cond2 != None and state.cond2 == self.sep:
+					pass
+				else:
+					self._assign(re, self.sep, self.sep, 1)
 			else:
 				if self.args.rel_l - state.rel > 0 and self.args.rel_g_l - state.rel_g > 0:
 					self._assign(re, self.starts[RELATION], self.ends[RELATION], 1)
 					self._assign(re, self.starts[PREDICATE], self.ends[PREDICATE], 1)
 					self._assign(re, self.size, self.size+state.copy_length-1, 1)
-			self._assign(re, self.sep, self.sep, 1)
+				self._assign(re, self.sep, self.sep, 1)
 		elif state.cond == self.SDRS:
 			if state.d_rel == 0:
 				self._assign(re, self.starts[DISCOURSE], self.ends[DISCOURSE], 1)

@@ -229,11 +229,11 @@ def run_train(args):
 		
 		if check_iter % args.eval_per_update == 0:
 			torch.save({"encoder":encoder.state_dict(), "decoder":decoder.state_dict(), "input_representation": input_representation.state_dict()}, args.model_path_base+"/model"+str(int(check_iter/args.eval_per_update)))
-			test(args, args.dev_output, dev_instance, input_representation, encoder, decoder):
+			test(args, args.dev_output, dev_instance, dev_comb, actn_v, input_representation, encoder, decoder)
 		
 
 
-def test(args, output_file, test_instance, input_representation, encoder, decoder):
+def test(args, output_file, test_instance, test_comb, actn_v, input_representation, encoder, decoder):
 	
 	state_step1 = struct_constraints_state()
 	state_step2 = relation_constraints_state()
@@ -248,7 +248,8 @@ def test(args, output_file, test_instance, input_representation, encoder, decode
 			test_hidden_step1 = (test_hidden_t[0].view(args.action_n_layer, 1, -1), test_hidden_t[1].view(args.action_n_layer, 1, -1))
 			state_step1.reset()
 			test_output_step1, test_hidden_rep_step1, test_hidden_step1 = decoder(actn_v.toidx("<START>"), test_hidden_step1, test_enc_rep_t, train=False, state=state_step1, opt=1)
-			
+		
+			#print test_output_step1	
 			#print [actn_v.totok(x) for x in test_output_step1]
 			#print test_hidden_rep_step1[0]
 			#exit(1)
@@ -259,8 +260,11 @@ def test(args, output_file, test_instance, input_representation, encoder, decode
 			state_step2.reset_length(len(instance[0])-2) # <s> </s>
 			for k in range(len(test_output_step1)): # DRS( P1(
 				act1 = test_output_step1[k]
+				act2 = None
+				if k + 1 < len(test_output_step1):
+					act2 = test_output_step1[k+1]
 				if actn_v.totok(act1) in ["DRS(", "SDRS("]:
-					state_step2.reset_condition(act1)
+					state_step2.reset_condition(act1, act2)
 					one_test_output_step2, one_test_hidden_rep_step2, test_hidden_step2, partial_state = decoder(test_hidden_rep_step1[k], test_hidden_step2, test_enc_rep_t, train=False, state=state_step2, opt=2)
 					test_output_step2.append(one_test_output_step2)
 					test_hidden_rep_step2.append(one_test_hidden_rep_step2)
@@ -425,7 +429,7 @@ def run_test(args):
 	
 	test_instance, word_v, char_v, extra_vl = input2instance(test_input, word_v, char_v, pretrain, extra_vl, {}, args, "dev")
 	
-	test(args, args.output_file, test_instance, input_representation, encoder, decoder)
+	test(args, args.test_output, test_instance, test_comb, actn_v, input_representation, encoder, decoder)
 	
 def run_check(args):
 

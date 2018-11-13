@@ -127,7 +127,7 @@ class decoder(nn.Module):
 							b += 1
 							continue
 					else:
-						if self.cstn1.bracket_completed or len(beamMatrix) > self.args.max_struct_l:
+						if self.cstn1.bracket_completed(beam.state) or len(beamMatrix) > self.args.max_struct_l:
 							tmp.append([beam.score, -1, b])
 							b += 1
 							continue
@@ -305,7 +305,7 @@ class decoder(nn.Module):
 							b += 1
 							continue
 					else:
-						if self.cstn2.isterminal(beam.state) or len(beamMatrix) > (self.args.rel + self.args.d_rel)*2:
+						if self.cstn2.isterminal(beam.state) or len(beamMatrix) > (self.args.rel_l + self.args.d_rel_l)*2:
 							tmp.append([beam.score, -1, b])
 							b += 1
 							continue
