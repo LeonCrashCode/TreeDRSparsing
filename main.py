@@ -230,7 +230,7 @@ def run_train(args):
 		
 		if check_iter % args.eval_per_update == 0:
 			torch.save({"encoder":encoder.state_dict(), "decoder":decoder.state_dict(), "input_representation": input_representation.state_dict()}, args.model_path_base+"/model"+str(int(check_iter/args.eval_per_update)))
-
+			"""
 			state_step1 = struct_constraints_state()
 			state_step2 = relation_constraints_state()
 			state_step3 = variable_constraints_state()
@@ -308,8 +308,7 @@ def run_train(args):
 					w.write(" ".join(dev_output) + "\n")
 					w.flush()
 				w.close()
-			exit(1)
-
+			"""
 def illegal_struct(struct):
 	if struct[0] not in ["DRS(" ,"SDRS("]:
 		return True, "root error"
@@ -400,6 +399,101 @@ def illegal_var(actn_v, rel, var):
 	if cansame == False and len(var) == 3 and var[0] == var[1]:
 		return True, "relation semantic loop"
 	return False, "no message"
+
+def test(args, test_instance, cstn_step1, cstn_step2, cstn_step3, input_representation, encoder, decoder):
+	
+	state_step1 = struct_constraints_state()
+	state_step2 = relation_constraints_state()
+	state_step3 = variable_constraints_state()
+	with open(args.test_output, "w") as w:
+		for j, instance in enumerate(test_instance):
+			print j
+			test_input_t = input_representation(instance, singleton_idx_dict=None, train=False)
+			test_enc_rep_t, test_hidden_t= encoder(test_input_t, test_comb[j], train=False)
+
+			#step 1
+			test_hidden_step1 = (test_hidden_t[0].view(args.action_n_layer, 1, -1), test_hidden_t[1].view(args.action_n_layer, 1, -1))
+			state_step1.reset()
+			test_output_step1, test_hidden_rep_step1, test_hidden_step1 = decoder(actn_v.toidx("<START>"), test_hidden_step1, test_enc_rep_t, train=False, state=state_step1, opt=1)
+			
+			#print [actn_v.totok(x) for x in test_output_step1]
+			#print test_hidden_rep_step1[0]
+			#exit(1)
+			#step 2
+			test_output_step2 = []
+			test_hidden_rep_step2 = []
+			test_hidden_step2 = (test_hidden_t[0].view(args.action_n_layer, 1, -1), test_hidden_t[1].view(args.action_n_layer, 1, -1))
+			state_step2.reset_length(len(instance[0])-2) # <s> </s>
+			for k in range(len(test_output_step1)): # DRS( P1(
+				act1 = test_output_step1[k]
+				if actn_v.totok(act1) in ["DRS(", "SDRS("]:
+					state_step2.reset_condition(act1)
+					one_test_output_step2, one_test_hidden_rep_step2, test_hidden_step2, partial_state = decoder(test_hidden_rep_step1[k], test_hidden_step2, test_enc_rep_t, train=False, state=state_step2, opt=2)
+					test_output_step2.append(one_test_output_step2)
+					test_hidden_rep_step2.append(one_test_hidden_rep_step2)
+					#partial_state is to store how many relation it already has
+					state_step2.rel_g, state_step2.d_rel_g = partial_state
+					#print test_hidden_step2
+
+					#print one_test_hidden_rep_step2
+					#print test_hidden_step2
+					#exit(1)
+			#print test_output_step2
+			#step 3
+			k_scope = get_k_scope(test_output_step1, actn_v)
+			p_max = get_p_max(test_output_step1, actn_v)
+			
+			test_output_step3 = []
+			test_hidden_step3 = (test_hidden_t[0].view(args.action_n_layer, 1, -1), test_hidden_t[1].view(args.action_n_layer, 1, -1))
+			state_step3.reset(p_max)
+			k = 0
+			sdrs_idx = 0
+			for act1 in test_output_step1:
+				if actn_v.totok(act1) in ["DRS(", "SDRS("]:
+					if actn_v.totok(act1) == "SDRS(":
+						state_step3.reset_condition(act1, k_scope[sdrs_idx])
+						sdrs_idx += 1
+					else:
+						state_step3.reset_condition(act1)
+					for kk in range(len(test_output_step2[k])-1): # rel( rel( )
+						act2 = test_output_step2[k][kk]
+						#if act2 >= actn_v.size():
+						#	print "$"+str(act2 - actn_v.size())+"("
+						#else:
+						#	print actn_v.totok(act2)
+							
+						state_step3.reset_relation(act2)
+						#print test_hidden_rep_step2[k][kk]
+						#print test_hidden_step3
+						#print "========================="
+						one_test_output_step3, _, test_hidden_step3, partial_state = decoder(test_hidden_rep_step2[k][kk], test_hidden_step3, test_enc_rep_t, train=False, state=state_step3, opt=3)
+						test_output_step3.append(one_test_output_step3)
+						#partial state is to store how many variable it already has
+						state_step3.x, state_step3.e, state_step3.s, state_step3.t = partial_state
+						#exit(1)
+					k += 1
+			#print test_output_step3
+			# write file
+			test_output = []
+			k = 0
+			kk = 0
+			for act1 in test_output_step1:
+				test_output.append(actn_v.totok(act1))
+				if test_output[-1] in ["DRS(", "SDRS("]:
+					for act2 in test_output_step2[k][:-1]:
+						if act2 >= actn_v.size():
+							test_output.append("$"+str(act2-actn_v.size())+"(")
+						else:
+							test_output.append(actn_v.totok(act2))
+						for act3 in test_output_step3[kk]:
+							test_output.append(actn_v.totok(act3))
+						kk += 1
+					k += 1
+			w.write(" ".join(test_output) + "\n")
+			w.flush()
+		w.close()
+
+
 def run_test(args):
 	word_v = vocabulary()
 	word_v.read_file(args.model_path_base+"/word.list")
@@ -514,10 +608,6 @@ def run_test(args):
 			state_step1.reset()
 			test_output_step1, test_hidden_rep_step1, test_hidden_step1 = decoder(actn_v.toidx("<START>"), test_hidden_step1, test_enc_rep_t, train=False, state=state_step1, opt=1)
 			
-			flag, message = illegal_struct([actn_v.totok(x) for x in test_output_step1])
-			if flag:
-				w.write(message+"|||"+" ".join([actn_v.totok(x) for x in test_output_step1])+"\n")
-				continue
 			#print [actn_v.totok(x) for x in test_output_step1]
 			#print test_hidden_rep_step1[0]
 			#exit(1)
@@ -526,17 +616,12 @@ def run_test(args):
 			test_hidden_rep_step2 = []
 			test_hidden_step2 = (test_hidden_t[0].view(args.action_n_layer, 1, -1), test_hidden_t[1].view(args.action_n_layer, 1, -1))
 			state_step2.reset_length(len(instance[0])-2) # <s> </s>
-			flag = False
 			for k in range(len(test_output_step1)): # DRS( P1(
 				act1 = test_output_step1[k]
 				if actn_v.totok(act1) in ["DRS(", "SDRS("]:
 					state_step2.reset_condition(act1)
 					one_test_output_step2, one_test_hidden_rep_step2, test_hidden_step2, partial_state = decoder(test_hidden_rep_step1[k], test_hidden_step2, test_enc_rep_t, train=False, state=state_step2, opt=2)
 					test_output_step2.append(one_test_output_step2)
-					flag, message = illegal_rel(actn_v, one_test_output_step2)
-					if flag:
-						w.write(message+"|||\n")
-						break
 					test_hidden_rep_step2.append(one_test_hidden_rep_step2)
 					#partial_state is to store how many relation it already has
 					state_step2.rel_g, state_step2.d_rel_g = partial_state
@@ -547,23 +632,17 @@ def run_test(args):
 					#exit(1)
 			#print test_output_step2
 			#step 3
-			if flag:
-				continue
-			p_max = 0
-			k_scope = {}
-			if args.struct_constraints and args.var_constraints:
-				k_scope = get_k_scope(test_output_step1, actn_v)
-				p_max = get_p_max(test_output_step1, actn_v)
+			k_scope = get_k_scope(test_output_step1, actn_v)
+			p_max = get_p_max(test_output_step1, actn_v)
 			
 			test_output_step3 = []
 			test_hidden_step3 = (test_hidden_t[0].view(args.action_n_layer, 1, -1), test_hidden_t[1].view(args.action_n_layer, 1, -1))
 			state_step3.reset(p_max)
 			k = 0
 			sdrs_idx = 0
-			flag = False
 			for act1 in test_output_step1:
 				if actn_v.totok(act1) in ["DRS(", "SDRS("]:
-					if actn_v.totok(act1) == "SDRS(" and args.struct_constraints and args.var_constraints:
+					if actn_v.totok(act1) == "SDRS(":
 						state_step3.reset_condition(act1, k_scope[sdrs_idx])
 						sdrs_idx += 1
 					else:
@@ -580,20 +659,12 @@ def run_test(args):
 						#print test_hidden_step3
 						#print "========================="
 						one_test_output_step3, _, test_hidden_step3, partial_state = decoder(test_hidden_rep_step2[k][kk], test_hidden_step3, test_enc_rep_t, train=False, state=state_step3, opt=3)
-						flag, message = illegal_var(actn_v, act2, one_test_output_step3)
-						if flag:
-							w.write(message+"|||\n")
-							break
 						test_output_step3.append(one_test_output_step3)
 						#partial state is to store how many variable it already has
 						state_step3.x, state_step3.e, state_step3.s, state_step3.t = partial_state
 						#exit(1)
-					if flag:
-						break
 					k += 1
 			#print test_output_step3
-			if flag:
-				continue
 			# write file
 			test_output = []
 			k = 0

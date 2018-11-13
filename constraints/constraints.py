@@ -10,7 +10,7 @@ class struct_constraints_state:
 		self.drs_c = 0
 
 		self.init = True
-
+		self.terminate = False
 class struct_constraints:
 	def __init__(self, actn_v, args):
 		self.actn_v = actn_v
@@ -37,9 +37,9 @@ class struct_constraints:
 
 		self.k_relation_offset = 0
 		self.drs_offset = 1
-
+		
 	def isterminal(self, state):
-		return len(state.stack) == 1 and state.init == False
+		return state.terminate
 
 	def get_step_mask(self, state):
 		if state.stack[-1] == 0:
@@ -64,8 +64,11 @@ class struct_constraints:
 			assert False
 	def _get_sos_mask(self, state):
 		re = self._get_zero(self.size)
-		self._assign(re, self.DRS, self.DRS, 1)
-		self._assign(re, self.SDRS, self.SDRS, 1)
+		if state.init:
+			self._assign(re, self.DRS, self.DRS, 1)
+			self._assign(re, self.SDRS, self.SDRS, 1)
+		else:
+			self._assign(re, self.end, self.end, 1)
 		return re
 	def _get_sdrs_mask(self, state):
 		#SDRS
@@ -142,7 +145,9 @@ class struct_constraints:
 		return re
 	def update(self, ix, state):
 		state.init = False
-		if ix in [self.DRS, self.SDRS, self.NOT, self.NEC, self.POS, self.IMP, self.DUP, self.OR]:
+		if ix == self.end:
+			state.terminate = True
+		elif ix in [self.DRS, self.SDRS, self.NOT, self.NEC, self.POS, self.IMP, self.DUP, self.OR]:
 			state.stack.append(ix)
 			if ix == self.DRS:
 				state.drs_c += 1
@@ -171,7 +176,8 @@ class struct_constraints:
 		elif ix == 1:
 			pass
 		else:
-			assert False
+			pass
+			#assert False
 
 	def _print_state(self, state):
 		print "stack", [self.actn_v.totok(x) for x in state.stack]

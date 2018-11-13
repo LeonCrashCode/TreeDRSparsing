@@ -210,7 +210,7 @@ def get_struct_rel_var(tree, actn_v):
 			assert False
 	
 	travel(tree)
-
+	#struct.append(actn_v.toidx("<END>"))
 	return [struct, relation, variable]
 
 	

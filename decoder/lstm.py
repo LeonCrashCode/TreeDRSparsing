@@ -108,7 +108,6 @@ class decoder(nn.Module):
 
 			beamMatrix = [[beam]]
 			all_terminal = False
-			bracket = 0
 			while not all_terminal:
 				#print "=======================", len(beamMatrix), "=================="
 				b = 0
@@ -122,7 +121,7 @@ class decoder(nn.Module):
 					#	tmp.append([beam.score, -1, b])
 					#	b += 1
 					#	continue
-					if self.cstn1.isterminal(beam.state) or (len(beamMatrix) > 1 and bracket == 0) or len(beamMatrix) > 200:
+					if self.cstn1.isterminal(beam.state) or len(beamMatrix) > 200:
 						tmp.append([beam.score, -1, b])
 						b += 1
 						continue
@@ -170,18 +169,12 @@ class decoder(nn.Module):
 				beamMatrix.append([])
 				while b < len(tmp) and b < self.args.beam_size:
 					score, tok_idx, prev_beam_idx = tmp[b]
-					if self.actn_v.totok(tok_idx) == ")":
-						bracket -= 1
-					else:
-						bracket += 1
 					#print "===="
-
 					new_beam = Beam()
 					new_beam.prev_beam_idx = prev_beam_idx
 					new_beam.score = score
 					new_beam.token = tok_idx
 					new_beam.state = copy.deepcopy(beamMatrix[-2][prev_beam_idx].state)
-
 					if self.cstn1.isterminal(beamMatrix[-2][prev_beam_idx].state):
 						new_beam.hidden_t = beamMatrix[-2][prev_beam_idx].hidden_t
 					else:
@@ -190,8 +183,7 @@ class decoder(nn.Module):
 						if self.args.gpu:
 							input_t = input_t.cuda()
 						new_beam.action_t = self.embeds(input_t).view(1, 1, -1)
-						if self.args.struct_constraints:
-							self.cstn1.update(tok_idx, new_beam.state)
+						self.cstn1.update(tok_idx, new_beam.state)
 					#new_beam.show()
 					#self.cstn1._print_state(new_beam.state)
 
