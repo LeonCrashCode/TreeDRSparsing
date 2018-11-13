@@ -28,7 +28,6 @@ from optimizer import optimizer
 
 import types
 import sys
-import re
 
 def run_train(args):
 	system_check_and_init(args)
@@ -230,182 +229,16 @@ def run_train(args):
 		
 		if check_iter % args.eval_per_update == 0:
 			torch.save({"encoder":encoder.state_dict(), "decoder":decoder.state_dict(), "input_representation": input_representation.state_dict()}, args.model_path_base+"/model"+str(int(check_iter/args.eval_per_update)))
-			"""
-			state_step1 = struct_constraints_state()
-			state_step2 = relation_constraints_state()
-			state_step3 = variable_constraints_state()
-			with open(args.dev_output_path_base+"/"+str(int(check_iter/args.eval_per_update)), "w") as w:
-				for j, instance in enumerate(dev_instance):
-					print j
-					dev_input_t = input_representation(instance, singleton_idx_dict=None, train=False)
-					dev_enc_rep_t, dev_hidden_t= encoder(dev_input_t, dev_comb[j], train=False)
+			test(args, args.dev_output, dev_instance, input_representation, encoder, decoder):
+		
 
-					#step 1
-					dev_hidden_step1 = (dev_hidden_t[0].view(args.action_n_layer, 1, -1), dev_hidden_t[1].view(args.action_n_layer, 1, -1))
-					state_step1.reset()
-					dev_output_step1, dev_hidden_rep_step1, dev_hidden_step1 = decoder(actn_v.toidx("<START>"), dev_hidden_step1, dev_enc_rep_t, train=False, state=state_step1, opt=1)
-					print dev_output_step1
-					#print [actn_v.totok(x) for x in dev_output_step1]
-					#print len(dev_output_step1), len(dev_hidden_rep_step1)
-					#print dev_hidden_rep_step1
-					#step 2
-					dev_output_step2 = []
-					dev_hidden_rep_step2 = []
-					dev_hidden_step2 = (dev_hidden_t[0].view(args.action_n_layer, 1, -1), dev_hidden_t[1].view(args.action_n_layer, 1, -1))
 
-					state_step2.reset_length(len(instance[0])-2) # <s> </s>
-					for k in range(len(dev_output_step1)): # DRS( P1(
-						act1 = dev_output_step1[k]
-						if actn_v.totok(act1) in ["DRS(", "SDRS("]:
-							#print "KKKK", k
-							state_step2.reset_condition(act1)
-							one_dev_output_step2, one_dev_hidden_rep_step2, dev_hidden_step2 = decoder(dev_hidden_rep_step1[k], dev_hidden_step2, dev_enc_rep_t, train=False, state=state_step2, opt=2)
-							dev_output_step2.append(one_dev_output_step2)
-							dev_hidden_rep_step2.append(one_dev_hidden_rep_step2)
-					
-					print dev_output_step2
-					#print dev_hidden_rep_step2[0]
-					#exit(1)
-					#step 3
-					k_scope = get_k_scope(dev_output_step1, actn_v)
-					p_max = get_p_max(dev_output_step1, actn_v)
-					dev_output_step3 = []
-					dev_hidden_step3 = (dev_hidden_t[0].view(args.action_n_layer, 1, -1), dev_hidden_t[1].view(args.action_n_layer, 1, -1))
-					state_step3.reset(p_max)
-					k = 0
-					sdrs_idx = 0
-					for act1 in dev_output_step1:
-						if actn_v.totok(act1) in ["DRS(", "SDRS("]:
-							if actn_v.totok(act1) == "SDRS(":
-								state_step3.reset_condition(act1, k_scope[sdrs_idx])
-								sdrs_idx += 1
-							else:
-								state_step3.reset_condition(act1)
-							for kk in range(len(dev_output_step2[k])-1): # rel( rel( )
-								act2 = dev_output_step2[k][kk]
-								state_step3.reset_relation(act2)
-								one_dev_output_step3, _, dev_hidden_step3 = decoder(dev_hidden_rep_step2[k][kk], dev_hidden_step3, dev_enc_rep_t, train=False, state=state_step3, opt=3)
-								dev_output_step3.append(one_dev_output_step3)
-							k += 1
-					print dev_output_step3
-
-					# write file
-					dev_output = []
-					k = 0
-					kk = 0
-					for act1 in dev_output_step1:
-						dev_output.append(actn_v.totok(act1))
-						if dev_output[-1] in ["DRS(", "SDRS("]:
-							for act2 in dev_output_step2[k][:-1]:
-								if act2 >= actn_v.size():
-									dev_output.append("$"+str(act2-actn_v.size())+"(")
-								else:
-									dev_output.append(actn_v.totok(act2))
-								for act3 in dev_output_step3[kk]:
-									dev_output.append(actn_v.totok(act3))
-								kk += 1
-							k += 1
-					w.write(" ".join(dev_output) + "\n")
-					w.flush()
-				w.close()
-			"""
-def illegal_struct(struct):
-	if struct[0] not in ["DRS(" ,"SDRS("]:
-		return True, "root error"
-	for item in struct:
-		if item in ["DRS(", "SDRS(", "NOT(", "NEC(", "POS(", "IMP(", "OR(", "DUP(", ")"]:
-			continue
-		if re.match("^[PK][0-9]+\($", item):
-			continue
-		return True, "label error"
-	cnt = 0
-	for item in struct:
-		if item == ")":
-			cnt -= 1
-		else:
-			cnt += 1
-	if cnt != 0:
-		return True, "bracket error"
-
-	for i in range(len(struct)):
-		if re.match("^[PK][0-9]+\($", struct[i]):
-			if i + 1 < len(struct) and (struct[i+1] in ["DRS(", "SDRS("]):
-				continue
-			else:
-				return True, "PK should have box"
-	
-	stack = []
-	for item in struct:
-		if item[-1] == "(":
-			stack.append([item[-1],0])
-		else:
-			b = stack[-1]
-			stack.pop()
-			if re.match("^P[0-9]+\($", b[0]):
-				if stack[-1][0] == "DRS(":
-					pass
-				else:
-					return True, "P should be in DRS"
-			if re.match("^K[0-9]+\($", b[0]):
-				if stack[-1][0] == "SDRS(":
-                                        pass
-                                else:
-                                        return True, "K should be in SDRS"
-				stack[-1][1] += 1
-			if b[0] == "SDRS(":
-				if b[1] >= 2:
-					pass
-				else:
-					return True, "SDRS should have at least two segments"
-	return False, "no message"
-
-def illegal_rel(actn_v, rel):
-	for item in rel:
-		a = ""
-		if item >= actn_v.size():
-			a = "dummy("
-		else:
-			a = actn_v.totok(item)
-		if a[-1] != "(" and a != ")":
-			return True, "should be relation"
-	if rel[-1] < actn_v.size() and actn_v.totok(rel[-1]) == ")":
-		pass
-	else:
-		return True, "relation loop"
-	return False, "no message"
-
-def illegal_var(actn_v, rel, var):
-	for item in var:
-		a = actn_v.totok(item)
-		if a == ")":
-			pass
-		elif a in ["CARD_NUMBER", "TIME_NUMBER"]:
-			pass
-		elif re.match("^[XESTPK][0-9]+$",a):
-			pass
-		else:
-			return True, "should be variable"
-	if len(var) != 2 and len(var) != 3:
-		return True, "should have one or two variable"
-	if var[-1] < actn_v.size() and actn_v.totok(var[-1]) == ")":
-		pass
-	else:
-		return True, "variable loop"
-	
-	cansame = False
-	
-	if rel < actn_v.size() and actn_v.totok(rel) == "Equ(":
-		cansame = True
-	if cansame == False and len(var) == 3 and var[0] == var[1]:
-		return True, "relation semantic loop"
-	return False, "no message"
-
-def test(args, test_instance, cstn_step1, cstn_step2, cstn_step3, input_representation, encoder, decoder):
+def test(args, output_file, test_instance, input_representation, encoder, decoder):
 	
 	state_step1 = struct_constraints_state()
 	state_step2 = relation_constraints_state()
 	state_step3 = variable_constraints_state()
-	with open(args.test_output, "w") as w:
+	with open(output_file, "w") as w:
 		for j, instance in enumerate(test_instance):
 			print j
 			test_input_t = input_representation(instance, singleton_idx_dict=None, train=False)
@@ -590,101 +423,10 @@ def run_test(args):
 		decoder = decoder.cuda()
 		input_representation = input_representation.cuda()
 	
-
-	
 	test_instance, word_v, char_v, extra_vl = input2instance(test_input, word_v, char_v, pretrain, extra_vl, {}, args, "dev")
-
-	state_step1 = struct_constraints_state()
-	state_step2 = relation_constraints_state()
-	state_step3 = variable_constraints_state()
-	with open(args.test_output, "w") as w:
-		for j, instance in enumerate(test_instance):
-			print j
-			test_input_t = input_representation(instance, singleton_idx_dict=None, train=False)
-			test_enc_rep_t, test_hidden_t= encoder(test_input_t, test_comb[j], train=False)
-
-			#step 1
-			test_hidden_step1 = (test_hidden_t[0].view(args.action_n_layer, 1, -1), test_hidden_t[1].view(args.action_n_layer, 1, -1))
-			state_step1.reset()
-			test_output_step1, test_hidden_rep_step1, test_hidden_step1 = decoder(actn_v.toidx("<START>"), test_hidden_step1, test_enc_rep_t, train=False, state=state_step1, opt=1)
-			
-			#print [actn_v.totok(x) for x in test_output_step1]
-			#print test_hidden_rep_step1[0]
-			#exit(1)
-			#step 2
-			test_output_step2 = []
-			test_hidden_rep_step2 = []
-			test_hidden_step2 = (test_hidden_t[0].view(args.action_n_layer, 1, -1), test_hidden_t[1].view(args.action_n_layer, 1, -1))
-			state_step2.reset_length(len(instance[0])-2) # <s> </s>
-			for k in range(len(test_output_step1)): # DRS( P1(
-				act1 = test_output_step1[k]
-				if actn_v.totok(act1) in ["DRS(", "SDRS("]:
-					state_step2.reset_condition(act1)
-					one_test_output_step2, one_test_hidden_rep_step2, test_hidden_step2, partial_state = decoder(test_hidden_rep_step1[k], test_hidden_step2, test_enc_rep_t, train=False, state=state_step2, opt=2)
-					test_output_step2.append(one_test_output_step2)
-					test_hidden_rep_step2.append(one_test_hidden_rep_step2)
-					#partial_state is to store how many relation it already has
-					state_step2.rel_g, state_step2.d_rel_g = partial_state
-					#print test_hidden_step2
-
-					#print one_test_hidden_rep_step2
-					#print test_hidden_step2
-					#exit(1)
-			#print test_output_step2
-			#step 3
-			k_scope = get_k_scope(test_output_step1, actn_v)
-			p_max = get_p_max(test_output_step1, actn_v)
-			
-			test_output_step3 = []
-			test_hidden_step3 = (test_hidden_t[0].view(args.action_n_layer, 1, -1), test_hidden_t[1].view(args.action_n_layer, 1, -1))
-			state_step3.reset(p_max)
-			k = 0
-			sdrs_idx = 0
-			for act1 in test_output_step1:
-				if actn_v.totok(act1) in ["DRS(", "SDRS("]:
-					if actn_v.totok(act1) == "SDRS(":
-						state_step3.reset_condition(act1, k_scope[sdrs_idx])
-						sdrs_idx += 1
-					else:
-						state_step3.reset_condition(act1)
-					for kk in range(len(test_output_step2[k])-1): # rel( rel( )
-						act2 = test_output_step2[k][kk]
-						#if act2 >= actn_v.size():
-						#	print "$"+str(act2 - actn_v.size())+"("
-						#else:
-						#	print actn_v.totok(act2)
-							
-						state_step3.reset_relation(act2)
-						#print test_hidden_rep_step2[k][kk]
-						#print test_hidden_step3
-						#print "========================="
-						one_test_output_step3, _, test_hidden_step3, partial_state = decoder(test_hidden_rep_step2[k][kk], test_hidden_step3, test_enc_rep_t, train=False, state=state_step3, opt=3)
-						test_output_step3.append(one_test_output_step3)
-						#partial state is to store how many variable it already has
-						state_step3.x, state_step3.e, state_step3.s, state_step3.t = partial_state
-						#exit(1)
-					k += 1
-			#print test_output_step3
-			# write file
-			test_output = []
-			k = 0
-			kk = 0
-			for act1 in test_output_step1:
-				test_output.append(actn_v.totok(act1))
-				if test_output[-1] in ["DRS(", "SDRS("]:
-					for act2 in test_output_step2[k][:-1]:
-						if act2 >= actn_v.size():
-							test_output.append("$"+str(act2-actn_v.size())+"(")
-						else:
-							test_output.append(actn_v.totok(act2))
-						for act3 in test_output_step3[kk]:
-							test_output.append(actn_v.totok(act3))
-						kk += 1
-					k += 1
-			w.write(" ".join(test_output) + "\n")
-			w.flush()
-		w.close()
-
+	
+	test(args, args.output_file, test_instance, input_representation, encoder, decoder)
+	
 def run_check(args):
 
 	import re
@@ -902,9 +644,7 @@ if __name__ == "__main__":
 	subparser.add_argument("--use-char", action='store_true')
 	subparser.add_argument("--gpu", action='store_true')
 	subparser.add_argument("--encoder", default="BILSTM", help="BILSTM, Transformer")
-	subparser.add_argument("--struct-constraints", action="store_true")
-	subparser.add_argument("--rel-constraints", action="store_true")
-	subparser.add_argument("--var-constraints", action="store_true")
+	subparser.add_argument("--const", action="store_true")
 
 	subparser = subparsers.add_parser("check")
 	subparser.set_defaults(callback=lambda args: run_check(args))

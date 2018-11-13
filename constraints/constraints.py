@@ -9,8 +9,8 @@ class struct_constraints_state:
 		self.p = 0
 		self.drs_c = 0
 
+		self.bracket = 0
 		self.init = True
-		self.terminate = False
 class struct_constraints:
 	def __init__(self, actn_v, args):
 		self.actn_v = actn_v
@@ -39,7 +39,10 @@ class struct_constraints:
 		self.drs_offset = 1
 		
 	def isterminal(self, state):
-		return state.terminate
+		return len(state.stack) == 1 and state.init == False
+
+	def bracket_completed(self, state):
+		return state.bracket == 0 and state.init == False
 
 	def get_step_mask(self, state):
 		if state.stack[-1] == 0:
@@ -61,7 +64,8 @@ class struct_constraints:
 			#k p
 			return self._get_1_mask(state)
 		else:
-			assert False
+			pass
+			#assert False
 	def _get_sos_mask(self, state):
 		re = self._get_zero(self.size)
 		if state.init:
@@ -145,9 +149,7 @@ class struct_constraints:
 		return re
 	def update(self, ix, state):
 		state.init = False
-		if ix == self.end:
-			state.terminate = True
-		elif ix in [self.DRS, self.SDRS, self.NOT, self.NEC, self.POS, self.IMP, self.DUP, self.OR]:
+		if ix in [self.DRS, self.SDRS, self.NOT, self.NEC, self.POS, self.IMP, self.DUP, self.OR]:
 			state.stack.append(ix)
 			if ix == self.DRS:
 				state.drs_c += 1
@@ -171,13 +173,19 @@ class struct_constraints:
 			elif state.stack[-1] == self.pb_start:
 				pass
 			else:
-				assert False
+				pass
+				#assert False
 			state.stack.pop()
 		elif ix == 1:
 			pass
 		else:
 			pass
 			#assert False
+
+		if ix == self.sep:
+			state.bracket -= 1
+		else:
+			state.bracket += 1
 
 	def _print_state(self, state):
 		print "stack", [self.actn_v.totok(x) for x in state.stack]
@@ -249,7 +257,8 @@ class relation_constraints:
 					self._assign(re, self.starts[DISCOURSE], self.ends[DISCOURSE], 1)
 				self._assign(re, self.sep, self.sep, 1)
 		else:
-			assert False
+			pass
+			#assert False
 		return re
 	
 	def update(self, ix, state):
@@ -262,7 +271,8 @@ class relation_constraints:
 			state.d_rel += 1
 			state.d_rel_g += 1
 		else:
-			assert False
+			pass
+			#assert False
 
 	def _print_state(self, state):
 		print "cond", self.actn_v.totok(state.cond)
@@ -328,7 +338,8 @@ class variable_constraints:
 		elif state.cond == self.SDRS:
 			return self.get_sdrs_mask(state)
 		else:
-			assert False
+			pass
+			#assert False
 
 	def _assign_all_v(self, re, state):
 		self._assign(re, self.x_start, self.x_start + state.x, 1)
