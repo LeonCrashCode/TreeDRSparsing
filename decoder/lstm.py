@@ -105,7 +105,7 @@ class decoder(nn.Module):
 				attn_scores_t = torch.bmm(output.transpose(0,1), encoder_rep_t.transpose(0,1).unsqueeze(0))[0]
 				attn_weights_t = F.softmax(attn_scores_t, 1)
 				attn_hiddens_t = torch.bmm(attn_weights_t.unsqueeze(0),encoder_rep_t.unsqueeze(0))[0]
-				feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((attn_hiddens_t, beam.action_t.view(output.size(0),-1)), 1)))
+				feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((attn_hiddens_t, action_t.view(output.size(0),-1)), 1)))
 				global_scores_t = self.out(feat_hiddens_t)
 
 
@@ -131,7 +131,7 @@ class decoder(nn.Module):
 						break
 				action_t = self.embeds(input_t).view(1, 1, -1)
 
-				return tokens, hidden_rep, hidden_t
+			return tokens, hidden_rep, hidden_t
 		else:
 			self.lstm.dropout = 0.0
 			tokens = []
@@ -322,13 +322,13 @@ class decoder(nn.Module):
 		elif self.args.beam_size == 1:
 			self.lstm.dropout = 0.0
 			tokens = []
-			hidden_reps = []
+			hidden_rep = []
 			action_t = self.struct2rel(input).view(1, 1,-1)
 
 			while True:
 				output, hidden = self.lstm(action_t, hidden)
 				#print output
-				hidden_reps.append(output)
+				hidden_rep.append(output)
 				copy_scores_t = torch.bmm(self.copy_matrix(output).transpose(0,1), encoder_rep_t.transpose(0,1).unsqueeze(0)).view(output.size(0), -1)
 				#copy_scores_t = torch.bmm(torch.bmm(output.transpose(0,1), self.copy_matrix), encoder_rep_t.transpose(0,1).unsqueeze(0)).view(output.size(0), -1)
 				#print copy_scores_t
@@ -370,7 +370,7 @@ class decoder(nn.Module):
 					action_t = self.copy(encoder_rep_t[idx - self.action_size].view(1, 1, -1))
 				else:
 					action_t = self.embeds(input_t).view(1, 1, -1)
-			return tokens, hidden_rep, hidden
+			return tokens, hidden_rep, hidden, [state.rel_g, state.d_rel_g]
 
 
 		else:
@@ -577,7 +577,7 @@ class decoder(nn.Module):
 						break
 				action_t = self.embeds(input_t).view(1, 1, -1)
 
-			return tokens, None, hidden
+			return tokens, None, hidden, [state.x, state.e, state.s, state.t]
 
 		else:
 			self.lstm.dropout = 0.0
