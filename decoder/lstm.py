@@ -131,7 +131,7 @@ class decoder(nn.Module):
 						break
 				action_t = self.embeds(input_t).view(1, 1, -1)
 
-			return tokens, hidden_rep, hidden_t
+			return tokens, hidden_rep[1:], hidden_t
 		else:
 			self.lstm.dropout = 0.0
 			tokens = []
@@ -363,14 +363,17 @@ class decoder(nn.Module):
 					if self.cstn2.isterminal(state):
 						break
 				else:
-					if self.cstn2.isterminal(state) or len(tokens) > (self.args.rel_l + self.args.d_rel_l)*2:
+					if self.cstn2.isterminal(state):
+						break
+					if len(tokens) > (self.args.rel_l + self.args.d_rel_l)*2:
+						tokens = tokens[0:-1] # last is not closed bracketd
 						break
 
 				if idx >= self.action_size:
 					action_t = self.copy(encoder_rep_t[idx - self.action_size].view(1, 1, -1))
 				else:
 					action_t = self.embeds(input_t).view(1, 1, -1)
-			return tokens, hidden_rep, hidden, [state.rel_g, state.d_rel_g]
+			return tokens, hidden_rep[1:], hidden, [state.rel_g, state.d_rel_g]
 
 
 		else:

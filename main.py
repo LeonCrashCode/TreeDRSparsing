@@ -251,7 +251,8 @@ def test(args, output_file, test_instance, test_comb, actn_v, input_representati
 		
 			#print test_output_step1	
 			#print [actn_v.totok(x) for x in test_output_step1]
-			#print test_hidden_rep_step1[0]
+			#print test_hidden_rep_step1
+			#print len(test_hidden_rep_step1)
 			#exit(1)
 			#step 2
 			test_output_step2 = []
