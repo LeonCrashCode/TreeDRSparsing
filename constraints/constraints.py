@@ -338,6 +338,9 @@ class variable_constraints:
 		return state.sep_exist
 
 	def get_step_mask(self, state):
+		if self.args.soft_const:
+			return self.get_mask(state)
+
 		if state.cond == self.DRS:
 			return self.get_drs_mask(state)
 		elif state.cond == self.SDRS:
@@ -351,6 +354,30 @@ class variable_constraints:
 		self._assign(re, self.e_start, self.e_start + state.e, 1)
 		self._assign(re, self.s_start, self.s_start + state.s, 1)
 		self._assign(re, self.t_start, self.t_start + state.t, 1)
+	def get_mask(self,state):
+		re = self._get_zero(self.size)
+		if state.prev_v == -1:
+			self._assign(re, self.x_start, self.x_start + self.args.X_l - 1, 1)
+			self._assign(re, self.e_start, self.e_start + self.args.E_l - 1, 1)
+			self._assign(re, self.s_start, self.s_start + self.args.S_l - 1, 1)
+			self._assign(re, self.t_start, self.t_start + self.args.T_l - 1, 1)
+			self._assign(re, self.p_start, self.p_start + self.args.P_l - 1, 1)
+			self._assign(re, self.k_start, self.k_start + self.args.K_l - 1, 1)
+			self._assign(re, self.CARD, self.CARD, 1)
+			self._assign(re, self.TIME, self.TIME, 1)
+		elif state.prev_prev_v == -1:
+			self._assign(re, self.x_start, self.x_start + self.args.X_l - 1, 1)
+                        self._assign(re, self.e_start, self.e_start + self.args.E_l - 1, 1)
+                        self._assign(re, self.s_start, self.s_start + self.args.S_l - 1, 1)
+                        self._assign(re, self.t_start, self.t_start + self.args.T_l - 1, 1)
+                        self._assign(re, self.p_start, self.p_start + self.args.P_l - 1, 1)
+                        self._assign(re, self.k_start, self.k_start + self.args.K_l - 1, 1)
+			self._assign(re, self.CARD, self.CARD, 1)
+			self._assign(re, self.TIME, self.TIME, 1)
+			self._assign(re, self.sep, self.sep, 1)
+		else:
+			self._assign(re, self.sep, self.sep, 1)
+		return re
 	def get_drs_mask(self, state):
 		if state.prev_v == -1:
 			re = self._get_zero(self.size)
@@ -396,13 +423,13 @@ class variable_constraints:
 	def update(self, ix, state):
 		if ix == self.sep:
 			state.sep_exist = True
-		elif ix == self.x_start + state.x:
+		elif ix == self.x_start + state.x and state.x + 1 < self.args.X_l:
 			state.x += 1
-		elif ix == self.e_start + state.e:
+		elif ix == self.e_start + state.e and state.e + 1 < self.args.E_l:
 			state.e += 1
-		elif ix == self.s_start + state.s:
+		elif ix == self.s_start + state.s and state.s + 1 < self.args.S_l:
 			state.s += 1
-		elif ix == self.t_start + state.t:
+		elif ix == self.t_start + state.t and state.t + 1 < self.args.T_l:
 			state.t += 1
 		state.prev_prev_v = state.prev_v
 		state.prev_v = ix

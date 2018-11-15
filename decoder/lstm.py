@@ -366,7 +366,10 @@ class decoder(nn.Module):
 					if self.cstn2.isterminal(state):
 						break
 					if len(tokens) > (self.args.rel_l + self.args.d_rel_l)*2:
-						tokens = tokens[0:-1] # last is not closed bracketd
+						if self.args.soft_const:
+							tokens[-1] = self.actn_v.toidx(")")
+						else:
+							tokens = tokens[0:-1] # last is not closed bracketd
 						break
 
 				if idx >= self.action_size:
@@ -576,7 +579,11 @@ class decoder(nn.Module):
 					if self.cstn3.isterminal(state):
 						break
 				else:
-					if self.cstn3.isterminal(state) or len(tokens) > 4:
+					if self.cstn3.isterminal(state):
+						break
+					if len(tokens) >= 3:
+						if self.args.soft_const:
+							tokens[-1] = self.actn_v.toidx(")")
 						break
 				action_t = self.embeds(input_t).view(1, 1, -1)
 

@@ -333,6 +333,8 @@ def test(args, output_file, test_instance, test_comb, actn_v, input_representati
 
 
 def run_test(args):
+	if args.soft_const:
+		args.const = True
 	word_v = vocabulary()
 	word_v.read_file(args.model_path_base+"/word.list")
 	word_v.freeze()
@@ -650,6 +652,7 @@ if __name__ == "__main__":
 	subparser.add_argument("--gpu", action='store_true')
 	subparser.add_argument("--encoder", default="BILSTM", help="BILSTM, Transformer")
 	subparser.add_argument("--const", action="store_true")
+	subparser.add_argument("--soft-const", action="store_true")
 
 	subparser = subparsers.add_parser("check")
 	subparser.set_defaults(callback=lambda args: run_check(args))
