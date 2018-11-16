@@ -71,8 +71,8 @@ def run_train(args):
 	train_input = read_input(args.train_input)
 	#print train_input[0]
 	train_comb = [ get_same_lemma(x[1]) for x in train_input]
-	dev_input = read_input(args.dev_input)
-	dev_comb = [ get_same_lemma(x[1]) for x in dev_input]
+	#dev_input = read_input(args.dev_input)
+	#dev_comb = [ get_same_lemma(x[1]) for x in dev_input]
 
 	singleton_idx_dict, word_dict, word_v = get_singleton_dict(train_input, word_v)
 	extra_vl = [ vocabulary() for i in range(len(train_input[0])-1)]	
@@ -81,7 +81,7 @@ def run_train(args):
 	char_v.freeze()
 	for i in range(len(extra_vl)):
 		extra_vl[i].freeze()
-	dev_instance, word_v, char_v, extra_vl = input2instance(dev_input, word_v, char_v, pretrain, extra_vl, {}, args, "dev")
+	#dev_instance, word_v, char_v, extra_vl = input2instance(dev_input, word_v, char_v, pretrain, extra_vl, {}, args, "dev")
 
 	train_output = read_tree(args.train_action)
 	#print train_output[0]
@@ -229,7 +229,7 @@ def run_train(args):
 		
 		if check_iter % args.eval_per_update == 0:
 			torch.save({"encoder":encoder.state_dict(), "decoder":decoder.state_dict(), "input_representation": input_representation.state_dict()}, args.model_path_base+"/model"+str(int(check_iter/args.eval_per_update)))
-			test(args, args.dev_output, dev_instance, dev_comb, actn_v, input_representation, encoder, decoder)
+			#test(args, args.dev_output, dev_instance, dev_comb, actn_v, input_representation, encoder, decoder)
 		
 
 
