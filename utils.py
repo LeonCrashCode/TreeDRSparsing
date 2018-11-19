@@ -20,6 +20,7 @@ def read_input_doc(filename):
 		line = line.strip()
 		if line == "":
 			data.append(zip(List[0], List[1]))
+			List = []
 		else:
 			if line[0] == "#":
 				continue
