@@ -47,7 +47,7 @@ class comb_encoder(nn.Module):
             encoder_rep.append([])
             for idx in comb[i]:
                 encoder_rep[-1].append(output_t[idx])
-            encoder_rep[-1] = (torch.sum(torch.cat(encoder_rep[-1]),0)/(len(comb[i])+1)).unsqueeze(0)
+            encoder_rep[-1] = (torch.sum(torch.cat(encoder_rep[-1]),0)/(len(comb[i]))).unsqueeze(0)
         encoder_rep = torch.cat(encoder_rep[1:-1], 0) ## <s> </s>
 
         return output_t.transpose(0,1), encoder_rep, hidden_t
