@@ -71,9 +71,9 @@ class decoder(nn.Module):
 
 			output, hidden = self.lstm(action_t, hidden)
 
-			attn_scores_t = torch.bmm(output.transpose(0,1), encoder_rep_t.transpose(0,1).unsqueeze(0))[0]
+			attn_scores_t = torch.bmm(output.transpose(0,1), encoder_rep_t.transpose(1,2))[0]
 			attn_weights_t = F.softmax(attn_scores_t, 1)
-			attn_hiddens_t = torch.bmm(attn_weights_t.unsqueeze(0),encoder_rep_t.unsqueeze(0))[0]
+			attn_hiddens_t = torch.bmm(attn_weights_t.unsqueeze(0),encoder_rep_t)[0]
 			feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((attn_hiddens_t, action_t.view(output.size(0),-1)), 1)))
 			global_scores_t = self.out(feat_hiddens_t)
 
@@ -102,9 +102,9 @@ class decoder(nn.Module):
 				output, hidden_t = self.lstm(action_t, hidden_t)
 				hidden_rep.append(output)
 
-				attn_scores_t = torch.bmm(output.transpose(0,1), encoder_rep_t.transpose(0,1).unsqueeze(0))[0]
+				attn_scores_t = torch.bmm(output.transpose(0,1), encoder_rep_t.transpose(1,2))[0]
 				attn_weights_t = F.softmax(attn_scores_t, 1)
-				attn_hiddens_t = torch.bmm(attn_weights_t.unsqueeze(0),encoder_rep_t.unsqueeze(0))[0]
+				attn_hiddens_t = torch.bmm(attn_weights_t.unsqueeze(0),encoder_rep_t)[0]
 				feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((attn_hiddens_t, action_t.view(output.size(0),-1)), 1)))
 				global_scores_t = self.out(feat_hiddens_t)
 
@@ -184,9 +184,9 @@ class decoder(nn.Module):
 					beam.output_t = output
 					beam.next_hidden_t = next_hidden
 
-					attn_scores_t = torch.bmm(output.transpose(0,1), encoder_rep_t.transpose(0,1).unsqueeze(0))[0]
+					attn_scores_t = torch.bmm(output.transpose(0,1), encoder_rep_t.transpose(1,2))[0]
 					attn_weights_t = F.softmax(attn_scores_t, 1)
-					attn_hiddens_t = torch.bmm(attn_weights_t.unsqueeze(0),encoder_rep_t.unsqueeze(0))[0]
+					attn_hiddens_t = torch.bmm(attn_weights_t.unsqueeze(0),encoder_rep_t)[0]
 					feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((attn_hiddens_t, beam.action_t.view(output.size(0),-1)), 1)))
 					global_scores_t = self.out(feat_hiddens_t)
 
@@ -286,9 +286,9 @@ class decoder(nn.Module):
 			copy_scores_t = torch.bmm(self.copy_matrix(output).transpose(0,1), copy_rep_t.transpose(0,1).unsqueeze(0)).view(output.size(0), -1)
 			#copy_scores_t = torch.bmm(torch.bmm(output.transpose(0,1), self.copy_matrix), encoder_rep_t.transpose(0,1).unsqueeze(0)).view(output.size(0), -1)
 
-			attn_scores_t = torch.bmm(output.transpose(0,1), encoder_rep_t.transpose(0,1).unsqueeze(0))[0]
+			attn_scores_t = torch.bmm(output.transpose(0,1), encoder_rep_t.transpose(1,2))[0]
 			attn_weights_t = F.softmax(attn_scores_t, 1)
-			attn_hiddens_t = torch.bmm(attn_weights_t.unsqueeze(0),encoder_rep_t.unsqueeze(0))[0]
+			attn_hiddens_t = torch.bmm(attn_weights_t.unsqueeze(0),encoder_rep_t)[0]
 			feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((attn_hiddens_t, action_t.view(output.size(0),-1)), 1)))
 			global_scores_t = self.out(feat_hiddens_t)
 
@@ -332,11 +332,11 @@ class decoder(nn.Module):
 				copy_scores_t = torch.bmm(self.copy_matrix(output).transpose(0,1), copy_rep_t.transpose(0,1).unsqueeze(0)).view(output.size(0), -1)
 				#copy_scores_t = torch.bmm(torch.bmm(output.transpose(0,1), self.copy_matrix), encoder_rep_t.transpose(0,1).unsqueeze(0)).view(output.size(0), -1)
 				#print copy_scores_t
-				attn_scores_t = torch.bmm(output.transpose(0,1), encoder_rep_t.transpose(0,1).unsqueeze(0))[0]
+				attn_scores_t = torch.bmm(output.transpose(0,1), encoder_rep_t.transpose(1,2))[0]
 				#print attn_scores_t
 				attn_weights_t = F.softmax(attn_scores_t, 1)
 				#print attn_weights_t
-				attn_hiddens_t = torch.bmm(attn_weights_t.unsqueeze(0),encoder_rep_t.unsqueeze(0))[0]
+				attn_hiddens_t = torch.bmm(attn_weights_t.unsqueeze(0),encoder_rep_t)[0]
 				#print "attn_hiddens_t", attn_hiddens_t
 				feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((attn_hiddens_t, action_t.view(output.size(0),-1)), 1)))
 				#print "feat_hiddens_t", feat_hiddens_t
@@ -426,11 +426,11 @@ class decoder(nn.Module):
 					copy_scores_t = torch.bmm(self.copy_matrix(output).transpose(0,1), copy_rep_t.transpose(0,1).unsqueeze(0)).view(output.size(0), -1)
 					#copy_scores_t = torch.bmm(torch.bmm(output.transpose(0,1), self.copy_matrix), encoder_rep_t.transpose(0,1).unsqueeze(0)).view(output.size(0), -1)
 					#print copy_scores_t
-					attn_scores_t = torch.bmm(output.transpose(0,1), encoder_rep_t.transpose(0,1).unsqueeze(0))[0]
+					attn_scores_t = torch.bmm(output.transpose(0,1), encoder_rep_t.transpose(1,2).unsqueeze(0))[0]
 					#print attn_scores_t
 					attn_weights_t = F.softmax(attn_scores_t, 1)
 					#print attn_weights_t
-					attn_hiddens_t = torch.bmm(attn_weights_t.unsqueeze(0),encoder_rep_t.unsqueeze(0))[0]
+					attn_hiddens_t = torch.bmm(attn_weights_t.unsqueeze(0),encoder_rep_t)[0]
 					#print "attn_hiddens_t", attn_hiddens_t
 					feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((attn_hiddens_t, beam.action_t.view(output.size(0),-1)), 1)))
 					#print "feat_hiddens_t", feat_hiddens_t
@@ -529,9 +529,9 @@ class decoder(nn.Module):
 
 			output, hidden = self.lstm(action_t, hidden)
 
-			attn_scores_t = torch.bmm(output.transpose(0,1), encoder_rep_t.transpose(0,1).unsqueeze(0))[0]
+			attn_scores_t = torch.bmm(output.transpose(0,1), encoder_rep_t.transpose(1,2))[0]
 			attn_weights_t = F.softmax(attn_scores_t, 1)
-			attn_hiddens_t = torch.bmm(attn_weights_t.unsqueeze(0),encoder_rep_t.unsqueeze(0))[0]
+			attn_hiddens_t = torch.bmm(attn_weights_t.unsqueeze(0),encoder_rep_t)[0]
 			feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((attn_hiddens_t, action_t.view(output.size(0),-1)), 1)))
 			global_scores_t = self.out(feat_hiddens_t)
 
@@ -552,9 +552,9 @@ class decoder(nn.Module):
 			while True:
 				output, hidden = self.lstm(action_t, hidden)
 
-				attn_scores_t = torch.bmm(output.transpose(0,1), encoder_rep_t.transpose(0,1).unsqueeze(0))[0]
+				attn_scores_t = torch.bmm(output.transpose(0,1), encoder_rep_t.transpose(1,2))[0]
 				attn_weights_t = F.softmax(attn_scores_t, 1)
-				attn_hiddens_t = torch.bmm(attn_weights_t.unsqueeze(0),encoder_rep_t.unsqueeze(0))[0]
+				attn_hiddens_t = torch.bmm(attn_weights_t.unsqueeze(0),encoder_rep_t)[0]
 				feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((attn_hiddens_t, action_t.view(output.size(0),-1)), 1)))
 				global_scores_t = self.out(feat_hiddens_t)
 				#print "global_scores_t", global_scores_t
@@ -634,9 +634,9 @@ class decoder(nn.Module):
 					beam.output_t = output
 					beam.next_hidden_t = next_hidden
 
-					attn_scores_t = torch.bmm(output.transpose(0,1), encoder_rep_t.transpose(0,1).unsqueeze(0))[0]
+					attn_scores_t = torch.bmm(output.transpose(0,1), encoder_rep_t.transpose(1,2))[0]
 					attn_weights_t = F.softmax(attn_scores_t, 1)
-					attn_hiddens_t = torch.bmm(attn_weights_t.unsqueeze(0),encoder_rep_t.unsqueeze(0))[0]
+					attn_hiddens_t = torch.bmm(attn_weights_t.unsqueeze(0),encoder_rep_t)[0]
 					feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((attn_hiddens_t, beam.action_t.view(output.size(0),-1)), 1)))
 					global_scores_t = self.out(feat_hiddens_t)
 
