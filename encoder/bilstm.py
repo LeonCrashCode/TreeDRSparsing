@@ -31,7 +31,8 @@ class comb_encoder(nn.Module):
         super(comb_encoder, self).__init__()
         self.args = args
         self.lstm = nn.LSTM(args.input_dim, args.bilstm_hidden_dim, num_layers=args.bilstm_n_layer, bidirectional=True)
-
+        self.sent2input = nn.Linear(args.bilstm_hidden_dim * 2, args.bilstm_hidden_dim, bias=False)
+        self.doc_lstm = nn.LSTM(args.bilstm_hidden_dim, args.bilstm_hidden_dim, num_layers=args.bilstm_n_layer, bidirectional=True)
     def forward(self, input_t, comb, train=True):
         hidden_t = self.inithidden()
         if train:
@@ -43,7 +44,9 @@ class comb_encoder(nn.Module):
         for one_input_t in input_t:
             hidden_t = self.inithidden()
             one_output_t, _ = self.lstm(one_input_t.unsqueeze(1), hidden_t)
-            output_t.append(one_input_t)
+            output_t.append(one_output_t)
+
+        #output_t is [ni x 1 x H]
 
         encoder_rep = []
         for i in range(len(comb)):
@@ -51,9 +54,18 @@ class comb_encoder(nn.Module):
             for r,c in comb[i]:
                 encoder_rep[-1].append(output_t[r][c])
             encoder_rep[-1] = (torch.sum(torch.cat(encoder_rep[-1]),0)/(len(comb[i]))).unsqueeze(0)
-        encoder_rep = torch.cat(encoder_rep[1:-1], 0) ## <s> </s>
+        encoder_rep = torch.cat(encoder_rep, 0) 
 
-        return output_t.transpose(0,1), encoder_rep, hidden_t
+        sent_rep = [torch.sum(one_output_t,0).unsqueeze(0) / one_output_t.size(0) for one_output_t in output_t] # [1 x 1 x H]
+        sent_input = self.sent2input(torch.cat(sent_rep, 0)) #[m x 1 x H]
+
+        hidden_t = self.inithidden()
+        sent_rep, hidden_t = self.doc_lstm(sent_input, hidden_t)
+
+        # sent_rep is m x 1 x H
+        output_t = [x.transpose(0,1) for x in output_t] # [1 x ni x H]
+
+        return output_t, sent_rep.transpose(0,1), encoder_rep, hidden_t
 
     def inithidden(self):
         if self.args.gpu:

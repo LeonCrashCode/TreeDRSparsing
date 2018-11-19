@@ -50,95 +50,98 @@ class sentence_rep(nn.Module):
 		self.tanh = nn.Tanh()
 		self.dropout = nn.Dropout(self.args.dropout_f)
 
-	def forward(self, instance, singleton_idx_dict=None, train=True):
-		word_sequence = []
-		for i, widx in enumerate(instance[0], 0):
-			if train and (widx in singleton_idx_dict) and random() < self.args.single_f:
-			#if False:
-				word_sequence.append(instance[3][i])
-			else:
-				word_sequence.append(widx)
+	def forward(self, instances, singleton_idx_dict=None, train=True):
+		reps = []
+		for instance in instances:
+			word_sequence = []
+			for i, widx in enumerate(instance[0], 0):
+				if train and (widx in singleton_idx_dict) and random() < self.args.single_f:
+				#if False:
+					word_sequence.append(instance[3][i])
+				else:
+					word_sequence.append(widx)
 
-		word_t = torch.LongTensor(word_sequence)
-		if self.args.gpu:
-			word_t = word_t.cuda()
-		word_t = self.word_embeds(word_t)
-
-		if train:
-			word_t = self.dropout(word_t)
-		#print word_t, word_t.size()
-		if self.args.use_char:
-			char_ts = []
-			for char_instance in instance[1]:
-				char_t = torch.LongTensor(char_instance)
-				if self.args.gpu:
-					char_t = char_t.cuda()
-				char_t = self.char_embeds(char_t)
-				char_hidden_t = self.initcharhidden()
-				char_t, _ = self.lstm(char_t.unsqueeze(1), char_hidden_t)
-				char_t_avg = torch.sum(char_t,0) / char_t.size(0)
-				char_t_max = torch.max(char_t,0)[0]
-				char_t_min = torch.min(char_t,0)[0]
-				char_t_per_word = torch.cat((char_t_avg, char_t_max, char_t_min), 1)
-				if train:
-					char_t_per_word = self.dropout(char_t_per_word)
-				char_ts.append(char_t_per_word)
-			char_t = torch.cat(char_ts, 0)
-			word_t = torch.cat((word_t, char_t), 1)
-		#print word_t, word_t.size()
-		if self.args.pretrain_path:
-			pretrain_t = torch.LongTensor(instance[2])
+			word_t = torch.LongTensor(word_sequence)
 			if self.args.gpu:
-				pretrain_t = pretrain_t.cuda()
-			pretrain_t = self.pretrain_embeds(pretrain_t)
-			word_t = torch.cat((word_t, pretrain_t), 1)
-		#print word_t, word_t.size()
-		if self.args.extra_dim_list:
-			"""
-			for i, extra_embeds in enumerate(self.extra_embeds):
-				extra_t = torch.LongTensor(instance[4+i])
-				if self.args.gpu:
-					extra_t = extra_t.cuda()
-				extra_t = extra_embeds(extra_t)
-				if not test:
-					extra_t = self.dropout(extra_t)
-				word_t = torch.cat((word_t, extra_t), 1)
-			"""
-			if len(instance)-4 >= 1:
-				extra_t = torch.LongTensor(instance[4+0])
-				if self.args.gpu:
-					extra_t = extra_t.cuda()
-				extra_t = self.extra_embeds1(extra_t)
-				word_t = torch.cat((word_t, extra_t), 1)
-			if len(instance)-4 >= 2:
-				extra_t = torch.LongTensor(instance[4+1])
-				if self.args.gpu:
-					extra_t = extra_t.cuda()
-				extra_t = self.extra_embeds1(extra_t)
-				word_t = torch.cat((word_t, extra_t), 1)
-			if len(instance)-4 >= 3:
-				extra_t = torch.LongTensor(instance[4+2])
-				if self.args.gpu:
-					extra_t = extra_t.cuda()
-				extra_t = self.extra_embeds1(extra_t)
-				word_t = torch.cat((word_t, extra_t), 1)
-			if len(instance)-4 >= 4:
-				extra_t = torch.LongTensor(instance[4+3])
-				if self.args.gpu:
-					extra_t = extra_t.cuda()
-				extra_t = self.extra_embeds1(extra_t)
-				word_t = torch.cat((word_t, extra_t), 1)
-			if len(instance)-4 >= 5:
-				extra_t = torch.LongTensor(instance[4+4])
-				if self.args.gpu:
-					extra_t = extra_t.cuda()
-				extra_t = self.extra_embeds1(extra_t)
-				word_t = torch.cat((word_t, extra_t), 1)
+				word_t = word_t.cuda()
+			word_t = self.word_embeds(word_t)
 
-		#print word_embeddings, word_embeddings.size()
-		word_t = self.tanh(self.info2input(word_t))
-		#print word_embeddings, word_embeddings.size()
-		return word_t
+			if train:
+				word_t = self.dropout(word_t)
+			#print word_t, word_t.size()
+			if self.args.use_char:
+				char_ts = []
+				for char_instance in instance[1]:
+					char_t = torch.LongTensor(char_instance)
+					if self.args.gpu:
+						char_t = char_t.cuda()
+					char_t = self.char_embeds(char_t)
+					char_hidden_t = self.initcharhidden()
+					char_t, _ = self.lstm(char_t.unsqueeze(1), char_hidden_t)
+					char_t_avg = torch.sum(char_t,0) / char_t.size(0)
+					char_t_max = torch.max(char_t,0)[0]
+					char_t_min = torch.min(char_t,0)[0]
+					char_t_per_word = torch.cat((char_t_avg, char_t_max, char_t_min), 1)
+					if train:
+						char_t_per_word = self.dropout(char_t_per_word)
+					char_ts.append(char_t_per_word)
+				char_t = torch.cat(char_ts, 0)
+				word_t = torch.cat((word_t, char_t), 1)
+			#print word_t, word_t.size()
+			if self.args.pretrain_path:
+				pretrain_t = torch.LongTensor(instance[2])
+				if self.args.gpu:
+					pretrain_t = pretrain_t.cuda()
+				pretrain_t = self.pretrain_embeds(pretrain_t)
+				word_t = torch.cat((word_t, pretrain_t), 1)
+			#print word_t, word_t.size()
+			if self.args.extra_dim_list:
+				"""
+				for i, extra_embeds in enumerate(self.extra_embeds):
+					extra_t = torch.LongTensor(instance[4+i])
+					if self.args.gpu:
+						extra_t = extra_t.cuda()
+					extra_t = extra_embeds(extra_t)
+					if not test:
+						extra_t = self.dropout(extra_t)
+					word_t = torch.cat((word_t, extra_t), 1)
+				"""
+				if len(instance)-4 >= 1:
+					extra_t = torch.LongTensor(instance[4+0])
+					if self.args.gpu:
+						extra_t = extra_t.cuda()
+					extra_t = self.extra_embeds1(extra_t)
+					word_t = torch.cat((word_t, extra_t), 1)
+				if len(instance)-4 >= 2:
+					extra_t = torch.LongTensor(instance[4+1])
+					if self.args.gpu:
+						extra_t = extra_t.cuda()
+					extra_t = self.extra_embeds1(extra_t)
+					word_t = torch.cat((word_t, extra_t), 1)
+				if len(instance)-4 >= 3:
+					extra_t = torch.LongTensor(instance[4+2])
+					if self.args.gpu:
+						extra_t = extra_t.cuda()
+					extra_t = self.extra_embeds1(extra_t)
+					word_t = torch.cat((word_t, extra_t), 1)
+				if len(instance)-4 >= 4:
+					extra_t = torch.LongTensor(instance[4+3])
+					if self.args.gpu:
+						extra_t = extra_t.cuda()
+					extra_t = self.extra_embeds1(extra_t)
+					word_t = torch.cat((word_t, extra_t), 1)
+				if len(instance)-4 >= 5:
+					extra_t = torch.LongTensor(instance[4+4])
+					if self.args.gpu:
+						extra_t = extra_t.cuda()
+					extra_t = self.extra_embeds1(extra_t)
+					word_t = torch.cat((word_t, extra_t), 1)
+
+			#print word_embeddings, word_embeddings.size()
+			word_t = self.tanh(self.info2input(word_t))
+			reps.append(word_t)
+			#print word_embeddings, word_embeddings.size()
+		return reps
 
 	def initcharhidden(self):
 		if self.args.gpu:

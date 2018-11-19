@@ -14,17 +14,17 @@ def read_input(filename):
 	return data
 
 def read_input_doc(filename):
-	data = [ [] ]
+	data = []
+	List = []
 	for line in open(filename):
 		line = line.strip()
 		if line == "":
-			data.append([])
+			data.append(zip(List[0], List[1]))
 		else:
 			if line[0] == "#":
 				continue
-			data[-1].append([ ["<s>"] + x.split() + ["</s>"] for x in line.split("|||")])
-	if len(data[-1]) == 0:
-		data.pop()
+			List.append([ ["<s>"] + x.strip().split() + ["</s>"] for x in line.split("|||")])
+
 	return data
 
 def get_singleton_dict(train_input, word_v):

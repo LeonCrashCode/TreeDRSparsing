@@ -36,30 +36,32 @@ class decoder(nn.Module):
 
 		self.lstm = nn.LSTM(self.args.action_dim, self.args.action_hidden_dim, num_layers= self.args.action_n_layer)
 
-		self.feat = nn.Linear(self.args.action_hidden_dim + self.args.action_dim, self.args.action_feature_dim)
+		self.feat = nn.Linear(self.args.action_hidden_dim + self.args.action_hidden_dim + self.args.action_dim, self.args.action_feature_dim)
 		self.feat_tanh = nn.Tanh()
 
 		self.out = nn.Linear(self.args.action_feature_dim, self.action_size)
 
-		self.copy_matrix = nn.Linear(self.args.action_hidden_dim, self.args.action_hidden_dim, bias=False)
+		self.copy_head = nn.Linear(self.args.action_hidden_dim, self.args.action_hidden_dim, bias=False)
 		self.copy = nn.Linear(self.args.action_hidden_dim, self.args.action_dim)
 
+		self.sent_head = nn.Linear(self.args.action_hidden_dim, self.args.action_hidden_dim, bias=False)
+		self.word_head = nn.Linear(self.args.action_hidden_dim, self.args.action_hidden_dim, bias=False)
 
 		self.criterion = nn.NLLLoss()
 
 		self.actn_v = actn_v
 
 		self.cstn1, self.cstn2, self.cstn3 = constraints
-	def forward(self, inputs, hidden, encoder_rep_t, copy_rep_t, train, state, opt):
+	def forward(self, inputs, hidden, word_rep_t, sent_rep_t, copy_rep_t, train, state, opt):
 		if opt == 1:
-			return self.forward_1(inputs, hidden, encoder_rep_t, train, state)
+			return self.forward_1(inputs, hidden, word_rep_t, sent_rep_t, train, state)
 		elif opt == 2:
-			return self.forward_2(inputs, hidden, encoder_rep_t, copy_rep_t, train, state)
+			return self.forward_2(inputs, hidden, word_rep_t, sent_rep_t, copy_rep_t, train, state)
 		elif opt == 3:
-			return self.forward_3(inputs, hidden, encoder_rep_t, train, state)
+			return self.forward_3(inputs, hidden, word_rep_t, sent_rep_t, train, state)
 		else:
 			assert False, "unrecognized option"
-	def forward_1(self, input, hidden, encoder_rep_t, train, state):
+	def forward_1(self, input, hidden, word_rep_t, sent_rep_t, train, state):
 
 		if train:
 			self.lstm.dropout = self.args.dropout_f
@@ -71,10 +73,21 @@ class decoder(nn.Module):
 
 			output, hidden = self.lstm(action_t, hidden)
 
-			attn_scores_t = torch.bmm(output.transpose(0,1), encoder_rep_t.transpose(1,2))[0]
-			attn_weights_t = F.softmax(attn_scores_t, 1)
-			attn_hiddens_t = torch.bmm(attn_weights_t.unsqueeze(0),encoder_rep_t)[0]
-			feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((attn_hiddens_t, action_t.view(output.size(0),-1)), 1)))
+			# output is k x 1 x h
+			# word_rep_t is [1 x mi x h]
+			# sent_rep_t is 1 x n x h
+
+			sent_attn_scores_t = torch.bmm(self.sent_head(output).transpose(0,1), sent_rep_t.transpose(1,2)) # 1 x k x n
+			sent_attn_weights_t = F.softmax(sent_attn_scores_t[0], 1) # k x n
+			sent_attn_hiddens_t = torch.bmm(sent_attn_weights_t.unsqueeze(0), sent_rep_t) # 1 x k x h
+
+			word_rep_t = torch.cat(word_rep_t, 1) # 1 x m x h, where m = m0+m1+m2+...
+			word_attn_scores_t = torch.bmm(self.word_head(output).transpose(0,1), word_rep_t.transpose(1,2)) # 1 x k x m
+			word_attn_weights_t = F.softmax(word_attn_scores_t[0], 1) # k x m
+			word_attn_hiddens_t = torch.bmm(word_attn_weights_t.unsqueeze(0), word_rep_t) # 1 x k x h
+
+			feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((sent_attn_hiddens_t[0], word_attn_hiddens_t[0], action_t.view(output.size(0),-1)), 1)))
+
 			global_scores_t = self.out(feat_hiddens_t)
 
 			log_softmax_output_t = F.log_softmax(global_scores_t, 1)
@@ -98,16 +111,26 @@ class decoder(nn.Module):
 			hidden_t = (hidden[0].view(self.args.action_n_layer, 1, -1), hidden[1].view(self.args.action_n_layer, 1, -1))
 			action_t = self.embeds(input_t).unsqueeze(1)
 
+			word_rep_t = torch.cat(word_rep_t, 1) # 1 x m x h, where m = m0+m1+m2+...
 			while True:
 				output, hidden_t = self.lstm(action_t, hidden_t)
 				hidden_rep.append(output)
 
-				attn_scores_t = torch.bmm(output.transpose(0,1), encoder_rep_t.transpose(1,2))[0]
-				attn_weights_t = F.softmax(attn_scores_t, 1)
-				attn_hiddens_t = torch.bmm(attn_weights_t.unsqueeze(0),encoder_rep_t)[0]
-				feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((attn_hiddens_t, action_t.view(output.size(0),-1)), 1)))
-				global_scores_t = self.out(feat_hiddens_t)
+				# output is k x 1 x h
+				# word_rep_t is [1 x mi x h]
+				# sent_rep_t is 1 x n x h
+				sent_attn_scores_t = torch.bmm(self.sent_head(output).transpose(0,1), sent_rep_t.transpose(1,2)) # 1 x k x n
+				sent_attn_weights_t = F.softmax(sent_attn_scores_t[0], 1) # k x n
+				sent_attn_hiddens_t = torch.bmm(sent_attn_weights_t.unsqueeze(0), sent_rep_t) # 1 x k x h
 
+				
+				word_attn_scores_t = torch.bmm(self.word_head(output).transpose(0,1), word_rep_t.transpose(1,2)) # 1 x k x m
+				word_attn_weights_t = F.softmax(word_attn_scores_t[0], 1) # k x m
+				word_attn_hiddens_t = torch.bmm(word_attn_weights_t.unsqueeze(0), word_rep_t) # 1 x k x h
+
+				feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((sent_attn_hiddens_t[0], word_attn_hiddens_t[0], action_t.view(output.size(0),-1)), 1)))
+
+				global_scores_t = self.out(feat_hiddens_t)
 
 				score_t = global_scores_t
 				if self.args.const:
@@ -259,7 +282,7 @@ class decoder(nn.Module):
 					break
 			return tokens[::-1], hidden_rep[::-1], hidden
 
-	def forward_2(self, input, hidden, encoder_rep_t, copy_rep_t, train, state):
+	def forward_2(self, input, hidden, word_rep_t, sent_rep_t, copy_rep_t, train, state):
 		if train:
 			self.lstm.dropout = self.args.dropout_f
 			List = []
@@ -283,13 +306,24 @@ class decoder(nn.Module):
 
 			output, hidden = self.lstm(action_t, hidden)
 
-			copy_scores_t = torch.bmm(self.copy_matrix(output).transpose(0,1), copy_rep_t.transpose(0,1).unsqueeze(0)).view(output.size(0), -1)
+			# output is k x 1 x h
+			# word_rep_t is [1 x mi x h]
+			# sent_rep_t is 1 x n x h
+
+			sent_attn_scores_t = torch.bmm(self.sent_head(output).transpose(0,1), sent_rep_t.transpose(1,2)) # 1 x k x n
+			sent_attn_weights_t = F.softmax(sent_attn_scores_t[0], 1) # k x n
+			sent_attn_hiddens_t = torch.bmm(sent_attn_weights_t.unsqueeze(0), sent_rep_t) # 1 x k x h
+
+			word_rep_t = torch.cat(word_rep_t, 1) # 1 x m x h, where m = m0+m1+m2+...
+			word_attn_scores_t = torch.bmm(self.word_head(output).transpose(0,1), word_rep_t.transpose(1,2)) # 1 x k x m
+			word_attn_weights_t = F.softmax(word_attn_scores_t[0], 1) # k x m
+			word_attn_hiddens_t = torch.bmm(word_attn_weights_t.unsqueeze(0), word_rep_t) # 1 x k x h
+
+			copy_scores_t = torch.bmm(self.copy_head(output).transpose(0,1), copy_rep_t.transpose(0,1).unsqueeze(0)).view(output.size(0), -1)
 			#copy_scores_t = torch.bmm(torch.bmm(output.transpose(0,1), self.copy_matrix), encoder_rep_t.transpose(0,1).unsqueeze(0)).view(output.size(0), -1)
 
-			attn_scores_t = torch.bmm(output.transpose(0,1), encoder_rep_t.transpose(1,2))[0]
-			attn_weights_t = F.softmax(attn_scores_t, 1)
-			attn_hiddens_t = torch.bmm(attn_weights_t.unsqueeze(0),encoder_rep_t)[0]
-			feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((attn_hiddens_t, action_t.view(output.size(0),-1)), 1)))
+			feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((sent_attn_hiddens_t[0], word_attn_hiddens_t[0], action_t.view(output.size(0),-1)), 1)))
+
 			global_scores_t = self.out(feat_hiddens_t)
 
 			#print global_scores_t.size()
@@ -324,21 +358,28 @@ class decoder(nn.Module):
 			tokens = []
 			hidden_rep = []
 			action_t = self.struct2rel(input).view(1, 1,-1)
-
+			word_rep_t = torch.cat(word_rep_t, 1) # 1 x m x h, where m = m0+m1+m2+...
 			while True:
 				output, hidden = self.lstm(action_t, hidden)
 				#print output
 				hidden_rep.append(output)
-				copy_scores_t = torch.bmm(self.copy_matrix(output).transpose(0,1), copy_rep_t.transpose(0,1).unsqueeze(0)).view(output.size(0), -1)
+
+				# output is k x 1 x h
+				# word_rep_t is [1 x mi x h]
+				# sent_rep_t is 1 x n x h
+
+				sent_attn_scores_t = torch.bmm(self.sent_head(output).transpose(0,1), sent_rep_t.transpose(1,2)) # 1 x k x n
+				sent_attn_weights_t = F.softmax(sent_attn_scores_t[0], 1) # k x n
+				sent_attn_hiddens_t = torch.bmm(sent_attn_weights_t.unsqueeze(0), sent_rep_t) # 1 x k x h
+
+				word_attn_scores_t = torch.bmm(self.word_head(output).transpose(0,1), word_rep_t.transpose(1,2)) # 1 x k x m
+				word_attn_weights_t = F.softmax(word_attn_scores_t[0], 1) # k x m
+				word_attn_hiddens_t = torch.bmm(word_attn_weights_t.unsqueeze(0), word_rep_t) # 1 x k x h
+
+				copy_scores_t = torch.bmm(self.copy_head(output).transpose(0,1), copy_rep_t.transpose(0,1).unsqueeze(0)).view(output.size(0), -1)
 				#copy_scores_t = torch.bmm(torch.bmm(output.transpose(0,1), self.copy_matrix), encoder_rep_t.transpose(0,1).unsqueeze(0)).view(output.size(0), -1)
-				#print copy_scores_t
-				attn_scores_t = torch.bmm(output.transpose(0,1), encoder_rep_t.transpose(1,2))[0]
-				#print attn_scores_t
-				attn_weights_t = F.softmax(attn_scores_t, 1)
-				#print attn_weights_t
-				attn_hiddens_t = torch.bmm(attn_weights_t.unsqueeze(0),encoder_rep_t)[0]
-				#print "attn_hiddens_t", attn_hiddens_t
-				feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((attn_hiddens_t, action_t.view(output.size(0),-1)), 1)))
+				
+				feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((sent_attn_hiddens_t[0], word_attn_hiddens_t[0], action_t.view(output.size(0),-1)), 1)))
 				#print "feat_hiddens_t", feat_hiddens_t
 				global_scores_t = self.out(feat_hiddens_t)
 				#print global_scores_t
@@ -509,7 +550,7 @@ class decoder(nn.Module):
 					break
 			return tokens[::-1], hidden_rep[::-1], hidden, [state.rel_g, state.d_rel_g]
 
-	def forward_3(self, input, hidden, encoder_rep_t, train, state):
+	def forward_3(self, input, hidden, word_rep_t, sent_rep_t, train, state):
 		if train:
 			self.lstm.dropout = self.args.dropout_f
 			List = []
@@ -529,10 +570,21 @@ class decoder(nn.Module):
 
 			output, hidden = self.lstm(action_t, hidden)
 
-			attn_scores_t = torch.bmm(output.transpose(0,1), encoder_rep_t.transpose(1,2))[0]
-			attn_weights_t = F.softmax(attn_scores_t, 1)
-			attn_hiddens_t = torch.bmm(attn_weights_t.unsqueeze(0),encoder_rep_t)[0]
-			feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((attn_hiddens_t, action_t.view(output.size(0),-1)), 1)))
+			# output is k x 1 x h
+			# word_rep_t is [1 x mi x h]
+			# sent_rep_t is 1 x n x h
+
+			sent_attn_scores_t = torch.bmm(self.sent_head(output).transpose(0,1), sent_rep_t.transpose(1,2)) # 1 x k x n
+			sent_attn_weights_t = F.softmax(sent_attn_scores_t[0], 1) # k x n
+			sent_attn_hiddens_t = torch.bmm(sent_attn_weights_t.unsqueeze(0), sent_rep_t) # 1 x k x h
+
+			word_rep_t = torch.cat(word_rep_t, 1) # 1 x m x h, where m = m0+m1+m2+...
+			word_attn_scores_t = torch.bmm(self.word_head(output).transpose(0,1), word_rep_t.transpose(1,2)) # 1 x k x m
+			word_attn_weights_t = F.softmax(word_attn_scores_t[0], 1) # k x m
+			word_attn_hiddens_t = torch.bmm(word_attn_weights_t.unsqueeze(0), word_rep_t) # 1 x k x h
+
+			feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((sent_attn_hiddens_t[0], word_attn_hiddens_t[0], action_t.view(output.size(0),-1)), 1)))
+
 			global_scores_t = self.out(feat_hiddens_t)
 
 
@@ -549,13 +601,24 @@ class decoder(nn.Module):
 			self.lstm.dropout = 0.0
 			tokens = []
 			action_t = self.rel2var(input).view(1, 1,-1)
+			word_rep_t = torch.cat(word_rep_t, 1) # 1 x m x h, where m = m0+m1+m2+...
 			while True:
 				output, hidden = self.lstm(action_t, hidden)
 
-				attn_scores_t = torch.bmm(output.transpose(0,1), encoder_rep_t.transpose(1,2))[0]
-				attn_weights_t = F.softmax(attn_scores_t, 1)
-				attn_hiddens_t = torch.bmm(attn_weights_t.unsqueeze(0),encoder_rep_t)[0]
-				feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((attn_hiddens_t, action_t.view(output.size(0),-1)), 1)))
+				# output is k x 1 x h
+				# word_rep_t is [1 x mi x h]
+				# sent_rep_t is 1 x n x h
+
+				sent_attn_scores_t = torch.bmm(self.sent_head(output).transpose(0,1), sent_rep_t.transpose(1,2)) # 1 x k x n
+				sent_attn_weights_t = F.softmax(sent_attn_scores_t[0], 1) # k x n
+				sent_attn_hiddens_t = torch.bmm(sent_attn_weights_t.unsqueeze(0), sent_rep_t) # 1 x k x h
+
+				word_attn_scores_t = torch.bmm(self.word_head(output).transpose(0,1), word_rep_t.transpose(1,2)) # 1 x k x m
+				word_attn_weights_t = F.softmax(word_attn_scores_t[0], 1) # k x m
+				word_attn_hiddens_t = torch.bmm(word_attn_weights_t.unsqueeze(0), word_rep_t) # 1 x k x h
+
+				feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((sent_attn_hiddens_t[0], word_attn_hiddens_t[0], action_t.view(output.size(0),-1)), 1)))
+
 				global_scores_t = self.out(feat_hiddens_t)
 				#print "global_scores_t", global_scores_t
 
