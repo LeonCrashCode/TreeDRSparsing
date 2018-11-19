@@ -2,11 +2,11 @@
 class vocabulary:
 	def __init__(self, UNK=True):
 		if UNK:
-			self._tti = {"<UNK>":0}
-			self._itt = ["<UNK>"]
+			self._tti = {"<PAD>":0, "<UNK>":1}
+			self._itt = ["<PAD>", "<UNK>"]
 		else:
-			self._tti = {}
-			self._itt = []
+			self._tti = {"<PAD>":0}
+			self._itt = ["<PAD>"]
 		self._frozen = False
 	def freeze(self):
 		self._frozen = True
@@ -30,7 +30,7 @@ class vocabulary:
 			self._itt.append(tok)
 			return len(self._itt) - 1
 		else:
-			return 0
+			return self._tti["<UNK>"]
 	def totok(self, idx):
 		assert idx < self.size, "Out of Vocabulary"
 		return self._itt[idx]

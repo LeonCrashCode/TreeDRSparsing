@@ -34,7 +34,7 @@ class decoder(nn.Module):
 		self.struct2rel = nn.Linear(self.args.action_hidden_dim, self.args.action_dim)
 		self.rel2var = nn.Linear(self.args.action_hidden_dim, self.args.action_dim)
 
-		self.lstm = nn.LSTM(self.args.action_dim, self.args.action_hidden_dim, num_layers= self.args.action_n_layer)
+		self.lstm = nn.LSTM(self.args.action_dim, self.args.action_hidden_dim, num_layers= self.args.action_n_layer, batch_first=True)
 
 		self.feat = nn.Linear(self.args.action_hidden_dim + self.args.action_dim, self.args.action_feature_dim)
 		self.feat_tanh = nn.Tanh()
@@ -63,25 +63,31 @@ class decoder(nn.Module):
 
 		if train:
 			self.lstm.dropout = self.args.dropout_f
-			input_t = torch.LongTensor(input[:-1])
+			input = [torch.LongTensor(x[:-1]) for x in input]
 			if self.args.gpu:
-				input_t = input_t.cuda()
-			action_t = self.embeds(input_t).unsqueeze(1)
-			action_t = self.dropout(action_t)
+				input = [x.cuda() for x in input]
+			order, sorted_input = zip(*sorted(enumerate(input), key = lambda x: len(x[1]), reverse=True))
+			lengths = [len(i) for i in sorted_input]
+			padded_input =  nn.utils.rnn.pad_sequence(sorted_input, batch_first=True, padding_value=0)
+			padded_input_embeddings = self.embeds(padded_input)
+			padded_input_embeddings = self.dropout(padded_input_embeddings)
+			packed_padded_input_embeddings = nn.utils.rnn.pack_padded_sequence(padded_input_embeddings, lengths, batch_first=True)
+			
+			output, hidden = self.lstm(packed_padded_input_embeddings, hidden)
+			padded_output, lengths = nn.utils.rnn.pad_packed_sequence(output, batch_first=True, padding_value=0.0)
 
-			output, hidden = self.lstm(action_t, hidden)
 
-			attn_scores_t = torch.bmm(output.transpose(0,1), encoder_rep_t.transpose(0,1).unsqueeze(0))[0]
-			attn_weights_t = F.softmax(attn_scores_t, 1)
-			attn_hiddens_t = torch.bmm(attn_weights_t.unsqueeze(0),encoder_rep_t.unsqueeze(0))[0]
-			feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((attn_hiddens_t, action_t.view(output.size(0),-1)), 1)))
+			attn_scores_t = torch.bmm(padded_output, encoder_rep_t.transpose(1,2))
+			attn_weights_t = F.softmax(attn_scores_t, 2)
+			attn_hiddens_t = torch.bmm(attn_weights_t,encoder_rep_t)
+			feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((attn_hiddens_t, padded_input_embeddings), 2)))
 			global_scores_t = self.out(feat_hiddens_t)
 
-			log_softmax_output_t = F.log_softmax(global_scores_t, 1)
+			log_softmax_output_t = F.log_softmax(global_scores_t, 2)
 
-			action_g_t = torch.LongTensor(input[1:])
+			action_g_t = [torch.LongTensor(x[1:]) for x in input]
 			if self.args.gpu:
-				action_g_t = action_g_t.cuda()
+				action_g_t = [x.cuda() for x in action_g_t]
 
 			loss_t = self.criterion(log_softmax_output_t, action_g_t)
 

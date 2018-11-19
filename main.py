@@ -164,17 +164,27 @@ def run_train(args):
 				p.grad.zero_()
 		"""
 		model_optimizer.zero_grad()
-		if i == len(train_instance):
-			i = 0
-			epoch += 1
-			lr = args.learning_rate_f / (1 + epoch * args.learning_rate_decay_f)
+
+		batch_train_instance = []
+		batch_train_comb = []
+		batch_train_action = []
+		while len(batch_train_instance) < args.batch_size:
+			if i == len(train_instance):
+				i = 0
+				epoch += 1
+				lr = args.learning_rate_f / (1 + epoch * args.learning_rate_decay_f)
+			batch_train_instance.append(train_instance[i])
+			batch_train_comb.append(train_comb[i])
+			batch_train_action.append(train_action[i])
+			i += 1
 
 		check_iter += 1
-		input_t = input_representation(train_instance[i], singleton_idx_dict=singleton_idx_dict, train=True)
-		enc_rep_t, hidden_t = encoder(input_t, train_comb[i], train=True)
+		input_t, order = input_representation(batch_train_instance, singleton_idx_dict=singleton_idx_dict, train=True)
+		enc_rep_t, hidden_t = encoder(input_t, batch_train_comb, order, train=True)
+
 		#step 1
-		hidden_step1 = (hidden_t[0].view(args.action_n_layer, 1, -1), hidden_t[1].view(args.action_n_layer, 1, -1))
-		loss_t1, hidden_rep_t, hidden_step1 = decoder(train_action[i][0], hidden_step1, enc_rep_t, train=True, state=None, opt=1)
+		hidden_step1 = (hidden_t[0].view(args.action_n_layer, args.batch_size, -1), hidden_t[1].view(args.action_n_layer, args.batch_size, -1))
+		loss_t1, hidden_rep_t, hidden_step1 = decoder([x[0] for x in batch_train_action], hidden_step1, enc_rep_t, train=True, state=None, opt=1)
 		check_loss1 += loss_t1.data.tolist()
 		
 		#step 2
@@ -626,7 +636,7 @@ if __name__ == "__main__":
 	subparser.add_argument("--dev-input", default="data/22.input")
 	subparser.add_argument("--dev-action", default="data/22.gold")
 	subparser.add_argument("--dev-output", default="data/22.auto.clean.notop")
-	subparser.add_argument("--batch-size", type=int, default=250)
+	subparser.add_argument("--batch-size", type=int, default=10)
 	subparser.add_argument("--beam-size", type=int, default=1)
 	subparser.add_argument("--check-per-update", type=int, default=1000)
 	subparser.add_argument("--eval-per-update", type=int, default=30000)
