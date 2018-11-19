@@ -50,11 +50,11 @@ class decoder(nn.Module):
 		self.actn_v = actn_v
 
 		self.cstn1, self.cstn2, self.cstn3 = constraints
-	def forward(self, inputs, hidden, encoder_rep_t, train, state, opt):
+	def forward(self, inputs, hidden, encoder_rep_t, copy_rep_t, train, state, opt):
 		if opt == 1:
 			return self.forward_1(inputs, hidden, encoder_rep_t, train, state)
 		elif opt == 2:
-			return self.forward_2(inputs, hidden, encoder_rep_t, train, state)
+			return self.forward_2(inputs, hidden, encoder_rep_t, copy_rep_t, train, state)
 		elif opt == 3:
 			return self.forward_3(inputs, hidden, encoder_rep_t, train, state)
 		else:
@@ -259,7 +259,7 @@ class decoder(nn.Module):
 					break
 			return tokens[::-1], hidden_rep[::-1], hidden
 
-	def forward_2(self, input, hidden, encoder_rep_t, train, state):
+	def forward_2(self, input, hidden, encoder_rep_t, copy_rep_t, train, state):
 		if train:
 			self.lstm.dropout = self.args.dropout_f
 			List = []
@@ -270,7 +270,7 @@ class decoder(nn.Module):
 				for rel in rels[:-1]: # rel( rel( rel( )
 					assert type(rel) != types.NoneType
 					if type(rel) == types.StringType:
-						List.append(self.copy(encoder_rep_t[int(rel[1:-1])].view(1, 1, -1)))
+						List.append(self.copy(copy_rep_t[int(rel[1:-1])].view(1, 1, -1)))
 						#List.append(self.copy(input_rep_t[int(rel[1:-1])+1].view(1, 1, -1)))
 					else:
 						rel_t = torch.LongTensor([rel])
@@ -283,7 +283,7 @@ class decoder(nn.Module):
 
 			output, hidden = self.lstm(action_t, hidden)
 
-			copy_scores_t = torch.bmm(self.copy_matrix(output).transpose(0,1), encoder_rep_t.transpose(0,1).unsqueeze(0)).view(output.size(0), -1)
+			copy_scores_t = torch.bmm(self.copy_matrix(output).transpose(0,1), copy_rep_t.transpose(0,1).unsqueeze(0)).view(output.size(0), -1)
 			#copy_scores_t = torch.bmm(torch.bmm(output.transpose(0,1), self.copy_matrix), encoder_rep_t.transpose(0,1).unsqueeze(0)).view(output.size(0), -1)
 
 			attn_scores_t = torch.bmm(output.transpose(0,1), encoder_rep_t.transpose(0,1).unsqueeze(0))[0]
@@ -329,7 +329,7 @@ class decoder(nn.Module):
 				output, hidden = self.lstm(action_t, hidden)
 				#print output
 				hidden_rep.append(output)
-				copy_scores_t = torch.bmm(self.copy_matrix(output).transpose(0,1), encoder_rep_t.transpose(0,1).unsqueeze(0)).view(output.size(0), -1)
+				copy_scores_t = torch.bmm(self.copy_matrix(output).transpose(0,1), copy_rep_t.transpose(0,1).unsqueeze(0)).view(output.size(0), -1)
 				#copy_scores_t = torch.bmm(torch.bmm(output.transpose(0,1), self.copy_matrix), encoder_rep_t.transpose(0,1).unsqueeze(0)).view(output.size(0), -1)
 				#print copy_scores_t
 				attn_scores_t = torch.bmm(output.transpose(0,1), encoder_rep_t.transpose(0,1).unsqueeze(0))[0]
@@ -373,7 +373,7 @@ class decoder(nn.Module):
 						break
 
 				if idx >= self.action_size:
-					action_t = self.copy(encoder_rep_t[idx - self.action_size].view(1, 1, -1))
+					action_t = self.copy(copy_rep_t[idx - self.action_size].view(1, 1, -1))
 				else:
 					action_t = self.embeds(input_t).view(1, 1, -1)
 			return tokens, hidden_rep[1:], hidden, [state.rel_g, state.d_rel_g]
@@ -423,7 +423,7 @@ class decoder(nn.Module):
 					beam.next_hidden_t = next_hidden
 
 
-					copy_scores_t = torch.bmm(self.copy_matrix(output).transpose(0,1), encoder_rep_t.transpose(0,1).unsqueeze(0)).view(output.size(0), -1)
+					copy_scores_t = torch.bmm(self.copy_matrix(output).transpose(0,1), copy_rep_t.transpose(0,1).unsqueeze(0)).view(output.size(0), -1)
 					#copy_scores_t = torch.bmm(torch.bmm(output.transpose(0,1), self.copy_matrix), encoder_rep_t.transpose(0,1).unsqueeze(0)).view(output.size(0), -1)
 					#print copy_scores_t
 					attn_scores_t = torch.bmm(output.transpose(0,1), encoder_rep_t.transpose(0,1).unsqueeze(0))[0]
@@ -479,7 +479,7 @@ class decoder(nn.Module):
 					else:
 						new_beam.hidden_t = beamMatrix[-2][prev_beam_idx].next_hidden_t # next hidden
 						if tok_idx >= self.action_size:
-							new_beam.action_t = self.copy(encoder_rep_t[tok_idx - self.action_size].view(1, 1, -1))
+							new_beam.action_t = self.copy(copy_rep_t[tok_idx - self.action_size].view(1, 1, -1))
 						else:
 							input_t = torch.LongTensor([tok_idx])
 							if self.args.gpu:

@@ -42,13 +42,15 @@ class comb_encoder(nn.Module):
 
         encoder_rep = []
         for i in range(len(comb)):
-            encoder_rep.append([output_t[i]])
+            if comb[i][0] < i: # skpped becuase there are already a same lemma ahead
+                continue
+            encoder_rep.append([])
             for idx in comb[i]:
                 encoder_rep[-1].append(output_t[idx])
             encoder_rep[-1] = (torch.sum(torch.cat(encoder_rep[-1]),0)/(len(comb[i])+1)).unsqueeze(0)
         encoder_rep = torch.cat(encoder_rep[1:-1], 0) ## <s> </s>
 
-        return encoder_rep, hidden_t
+        return output_t, encoder_rep, hidden_t
 
     def inithidden(self):
         if self.args.gpu:

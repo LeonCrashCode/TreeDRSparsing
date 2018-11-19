@@ -253,10 +253,10 @@ def get_same_lemma(lemmas):
 	get matrix that indicates which lemmas are the same
 	"""
 	comb = []
-	for i, vi in enumerate(lemmas):
+	for vi in lemmas:
 		comb.append([])
 		for j, vj in enumerate(lemmas):
-			if vi == vj and i != j:
+			if vi == vj:
 				comb[-1].append(j)
 	return comb
 
