@@ -1,11 +1,11 @@
 import argparse
 from system import system_check_and_init
-from utils import read_input
+from utils import read_input_doc
 from utils import get_singleton_dict
-from utils import input2instance
+from utils import input2instance_doc
 from utils import read_tree
 from utils import tree2action as tree2action
-from utils import get_same_lemma
+from utils import get_same_lemma_doc
 
 from dictionary.vocabulary import vocabulary
 from dictionary.PretrainedEmb import PretrainedEmb
@@ -68,15 +68,25 @@ def run_train(args):
 	#print actn_v.size()
 	actn_v.freeze()
 	#instances
-	train_input = read_input(args.train_input)
+	train_input = read_input_doc(args.train_input)
 	#print train_input[0]
-	train_comb = [ get_same_lemma(x[1]) for x in train_input]
+	doc_lemma = [ [] ]
+	doc_word = [ [] ]
+	for x in train_input:
+		for y in x:
+			doc_lemma[-1].append(y[1])
+			doc_word[-1].append(y[0])
+		doc_lemma.append([])
+		doc_word.append([])
+	doc_lemma.pop()
+	doc_word.pop()
+	train_comb = [ get_same_lemma_doc(x) for x in doc_lemma]
 	#dev_input = read_input(args.dev_input)
 	#dev_comb = [ get_same_lemma(x[1]) for x in dev_input]
 
-	singleton_idx_dict, word_dict, word_v = get_singleton_dict(train_input, word_v)
-	extra_vl = [ vocabulary() for i in range(len(train_input[0])-1)]	
-	train_instance, word_v, char_v, extra_vl = input2instance(train_input, word_v, char_v, pretrain, extra_vl, word_dict, args, "train")
+	singleton_idx_dict, word_dict, word_v = get_singleton_dict(doc_word, word_v)
+	extra_vl = [ vocabulary() for i in range(len(train_input[0][0])-1)]	
+	train_instance, word_v, char_v, extra_vl = input2instance_doc(train_input, word_v, char_v, pretrain, extra_vl, word_dict, args, "train")
 	word_v.freeze()
 	char_v.freeze()
 	for i in range(len(extra_vl)):

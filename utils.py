@@ -13,6 +13,20 @@ def read_input(filename):
 		data.pop()
 	return data
 
+def read_input_doc(filename):
+	data = [ [] ]
+	for line in open(filename):
+		line = line.strip()
+		if line == "":
+			data.append([])
+		else:
+			if line[0] == "#":
+				continue
+			data[-1].append([ ["<s>"] + x.split() + ["</s>"] for x in line.split("|||")])
+	if len(data[-1]) == 0:
+		data.pop()
+	return data
+
 def get_singleton_dict(train_input, word_v):
 	d = {}
 	singleton_idx_dict = {}
@@ -133,6 +147,46 @@ def input2instance(train_input, word_v, char_v, pretrain, extra_vl, word_dict, a
 				train_instance[-1][-1].append(idx)
 
 	return train_instance, word_v, char_v, extra_vl
+
+def input2instance_doc(train_input, word_v, char_v, pretrain, extra_vl, word_dict, args, op):
+	train_instances = []
+
+	for instances in train_input:
+		train_instance = []
+		for instance in instances:
+			#lexicon representation
+			train_instance.append([])
+			train_instance[-1].append([]) # word
+			train_instance[-1].append([]) # char
+			train_instance[-1].append([]) # pretrain
+			train_instance[-1].append([]) # typed UNK
+			for w in instance[0]:
+				idx = word_v.toidx(w)
+				if op == "train":
+					train_instance[-1][0].append(idx)
+					idx = word_v.toidx(unkify(w, word_dict, "en"))
+					train_instance[-1][3].append(idx)
+				elif op == "dev":
+					if idx == 0: # UNK
+						idx = word_v.toidx(unkify(w, word_dict, "en"))
+					train_instance[-1][0].append(idx)
+
+				if args.use_char:
+					train_instance[-1][1].append([])
+					for c in list(w):
+						idx = char_v.toidx(c)
+						train_instance[-1][1][-1].append(idx)
+				if args.pretrain_path:
+					idx = pretrain.toidx(w.lower())
+					train_instance[-1][2].append(idx)
+			#extra representatoin
+			for i, extra_info in enumerate(instance[1:], 0):
+				train_instance[-1].append([])
+				for t in extra_info:
+					idx = extra_vl[i].toidx(t)
+					train_instance[-1][-1].append(idx)
+		train_instances.append(train_instance)
+	return train_instances, word_v, char_v, extra_vl
 
 def read_tree(filename):
 	data = []
@@ -258,6 +312,24 @@ def get_same_lemma(lemmas):
 		for j, vj in enumerate(lemmas):
 			if vi == vj:
 				comb[-1].append(j)
+	return comb
+
+def get_same_lemma_doc(lemmas):
+	comb = []
+	all_lemmas = []
+	for lemma in lemmas:
+		all_lemmas += lemma[1:-1] # alway not for <s> and </s>
+
+	past_lemmas = []
+	for vi in all_lemmas:
+		if vi in past_lemmas:
+			continue
+		past_lemmas.append(vi)
+		comb.append([])
+		for i in range(len(lemmas)):
+			for j, vj in enumerate(lemmas[i]):
+				if vi == vj:
+					comb[-1].append((i,j))
 	return comb
 
 def get_k_scope(output, actn_v):
