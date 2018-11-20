@@ -11,8 +11,8 @@ from dictionary.vocabulary import vocabulary
 from dictionary.PretrainedEmb import PretrainedEmb
 from representation.sentence_rep import sentence_rep
 
-from encoder.bilstm import comb_encoder as enc 
-from decoder.lstm import decoder as dec
+from encoder.bilstm_connect import comb_encoder as enc 
+from decoder.lstm2 import decoder as dec
 
 from utils import get_k_scope
 from utils import get_p_max
