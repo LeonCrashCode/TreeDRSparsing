@@ -41,11 +41,12 @@ class comb_encoder(nn.Module):
             self.lstm.dropout = 0
 
         output_t = []
+        sent_rep = []
         for one_input_t in input_t:
-            hidden_t = self.inithidden()
-            one_output_t, _ = self.lstm(one_input_t.unsqueeze(1), hidden_t)
+            one_output_t, hidden_t = self.lstm(one_input_t.unsqueeze(1), hidden_t)
             output_t.append(one_output_t)
-
+            sent_rep.append(hidden_t[0].view(self.args.bilstm_n_layer, 1, -1)[1]) #[1 x 1 x H]
+        
         #output_t is [ni x 1 x H]
 
         encoder_rep = []
@@ -56,7 +57,6 @@ class comb_encoder(nn.Module):
             encoder_rep[-1] = (torch.sum(torch.cat(encoder_rep[-1]),0)/(len(comb[i]))).unsqueeze(0)
         encoder_rep = torch.cat(encoder_rep, 0) 
 
-        sent_rep = [torch.sum(one_output_t,0).unsqueeze(0) / one_output_t.size(0) for one_output_t in output_t] # [1 x 1 x H]
         sent_input = self.sent2input(torch.cat(sent_rep, 0)) #[m x 1 x H]
 
         hidden_t = self.inithidden()
