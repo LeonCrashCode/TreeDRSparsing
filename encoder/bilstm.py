@@ -46,7 +46,7 @@ class comb_encoder(nn.Module):
             hidden_t = self.inithidden()
             one_output_t, _ = self.lstm(one_input_t.unsqueeze(1), hidden_t)
             output_t.append(one_output_t)
-            sent_rep.append(torch.sum(one_output_t,0) / one_output_t.size(0)) #[1 x 1 x H]
+            sent_rep.append(torch.sum(one_output_t,0).unsqueeze(0) / one_output_t.size(0)) #[1 x 1 x H]
         
         #output_t is [ni x 1 x H]
 
