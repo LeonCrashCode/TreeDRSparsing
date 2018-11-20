@@ -258,7 +258,8 @@ def test(args, output_file, test_instance, test_comb, actn_v, input_representati
 			test_output_step2 = []
 			test_hidden_rep_step2 = []
 			test_hidden_step2 = (test_hidden_t[0].view(args.action_n_layer, 1, -1), test_hidden_t[1].view(args.action_n_layer, 1, -1))
-			state_step2.reset_length(len(test_comb[j])-2) # <s> </s>
+			
+			state_step2.reset_length(test_copy_rep_t.size(0)) # <s> </s>
 			for k in range(len(test_output_step1)): # DRS( P1(
 				act1 = test_output_step1[k]
 				act2 = None
