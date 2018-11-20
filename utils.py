@@ -24,7 +24,9 @@ def read_input_doc(filename):
 		else:
 			if line[0] == "#":
 				continue
-			List.append([ ["<s>"] + x.strip().split() + ["</s>"] for x in line.split("|||")])
+			List.append([ ["<sep>"] + x.strip().split() for x in line.split("|||")])
+			List[-1][0][0] = "<s>"
+			List[-1][-1].append("</s>")
 
 	return data
 
@@ -319,8 +321,9 @@ def get_same_lemma_doc(lemmas):
 	comb = []
 	all_lemmas = []
 	for lemma in lemmas:
-		all_lemmas += lemma[1:-1] # alway not for <s> and </s>
-
+		all_lemmas += lemma[1:] # alway not for <sep> 
+	all_lemmas.pop() # pop </s>
+	
 	past_lemmas = []
 	for vi in all_lemmas:
 		if vi in past_lemmas:
