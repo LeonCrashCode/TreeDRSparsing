@@ -172,7 +172,7 @@ def tree2action(output, actn_v):
 	return actions
 import re
 def is_struct(tok):
-	if tok in ["DRS(", "SDRS(", "NOT(", "POS(", "NEC(", "IMP(", "OR(", "DUP("]:
+	if tok in ["DRS(", "DRS-N(", "DRS-S(", "SDRS(", "NOT(", "POS(", "NEC(", "IMP(", "OR(", "DUP("]:
 		return True
 	if re.match("^[PK][0-9]+\($", tok):
 		return True

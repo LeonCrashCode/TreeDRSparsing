@@ -173,6 +173,7 @@ def run_train(args):
 		input_t = input_representation(train_instance[i], singleton_idx_dict=singleton_idx_dict, train=True)
 		word_rep_t, sent_rep_t, copy_rep_t, hidden_t = encoder(input_t, train_comb[i], train_sep[i], train=True)
 		#step 1
+		#print " ".join([actn_v.totok(x) for x in train_action[i][0]])
 		hidden_step1 = (hidden_t[0].view(args.action_n_layer, 1, -1), hidden_t[1].view(args.action_n_layer, 1, -1))
 		loss_t1, hidden_rep_t, hidden_step1 = decoder(train_action[i][0], hidden_step1, word_rep_t, sent_rep_t, copy_rep_t=None, train=True, state=None, opt=1)
 		check_loss1 += loss_t1.data.tolist()
