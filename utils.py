@@ -269,32 +269,19 @@ def get_same_lemma(packed):
 	"""
 	lemmas = packed[0][1]
 	seps = packed[1]
-
-	combs = []
-	for i in range(len(seps)-1):
-		# for one sentence
-		s = seps[i]
-		e = seps[i+1]
-
-		idx_outra = s
-
-		j = s+1
-		past_lemmas = []
-		comb = []
-		while j < e:
-			current_lem = lemmas[j]
-			j += 1
-			if current_lem in past_lemmas:
-				continue
-			past_lemmas.append(current_lem)
-			comb.append([])
-			k = s+1
-			while k < e:
-				if current_lem == lemmas[k]:
-					comb[-1].append(k)
-				k += 1
-		combs.append(comb)
-	return combs
+	past_lemmas = []
+	comb = []
+	for i, li in enumerate(lemmas):
+		if i in seps:
+			continue
+		if li in past_lemmas:
+			continue
+		past_lemmas.append(li)
+		comb.append([])
+		for j, lj in enumerate(lemmas):
+			if lj == li:
+				comb[-1].append(j)
+	return comb
 
 def get_k_scope(output, actn_v):
 	stack = []

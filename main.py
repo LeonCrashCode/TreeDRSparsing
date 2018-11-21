@@ -11,7 +11,7 @@ from dictionary.vocabulary import vocabulary
 from dictionary.PretrainedEmb import PretrainedEmb
 from representation.sentence_rep import sentence_rep
 
-from encoder.bilstm import comb_encoder as enc 
+from encoder.bilstm import encoder_srnn as enc 
 from decoder.lstm import decoder as dec
 
 from utils import get_k_scope
@@ -171,10 +171,10 @@ def run_train(args):
 
 		check_iter += 1
 		input_t = input_representation(train_instance[i], singleton_idx_dict=singleton_idx_dict, train=True)
-		enc_rep_t, sent_rep_t, copy_rep_t, hidden_t = encoder(input_t, train_comb[i], sep[i], train=True)
+		word_rep_t, sent_rep_t, copy_rep_t, hidden_t = encoder(input_t, train_comb[i], train_sep[i], train=True)
 		#step 1
 		hidden_step1 = (hidden_t[0].view(args.action_n_layer, 1, -1), hidden_t[1].view(args.action_n_layer, 1, -1))
-		loss_t1, hidden_rep_t, hidden_step1 = decoder(train_action[i][0], hidden_step1, enc_rep_t, sent_rep_t=sent_rep_t, pointer= train_action[i][-1], copy_rep_t=None, train=True, state=None, opt=1)
+		loss_t1, hidden_rep_t, hidden_step1 = decoder(train_action[i][0], hidden_step1, word_rep_t, sent_rep_t, copy_rep_t=None, train=True, state=None, opt=1)
 		check_loss1 += loss_t1.data.tolist()
 		
 		#step 2
@@ -187,7 +187,7 @@ def run_train(args):
 				train_action_step2.append([hidden_rep_t[j], train_action[i][1][idx]])
 				idx += 1
 		assert idx == len(train_action[i][1])
-		loss_t2, hidden_rep_t, hidden_step2 = decoder(train_action_step2, hidden_step2, enc_rep_t, copy_rep_t=copy_rep_t, train=True, state=None, opt=2)
+		loss_t2, hidden_rep_t, hidden_step2 = decoder(train_action_step2, hidden_step2, word_rep_t, sent_rep_t, copy_rep_t=copy_rep_t, train=True, state=None, opt=2)
 		check_loss2 += loss_t2.data.tolist()
 		
 		#step 3
@@ -205,7 +205,7 @@ def run_train(args):
 				train_action_step3.append([hidden_rep_t[j], train_action[i][2][idx]])
 				idx += 1
 		assert idx == len(train_action[i][2])
-		loss_t3, hidden_rep_t, hidden_step3 = decoder(train_action_step3, hidden_step3, enc_rep_t, copy_rep_t=None, train=True, state=None, opt=3)
+		loss_t3, hidden_rep_t, hidden_step3 = decoder(train_action_step3, hidden_step3, word_rep_t, sent_rep_t, copy_rep_t=None, train=True, state=None, opt=3)
 		check_loss3 += loss_t3.data.tolist()
 
 		if check_iter % args.check_per_update == 0:
@@ -233,7 +233,7 @@ def run_train(args):
 		
 
 
-def test(args, output_file, test_instance, test_comb, actn_v, input_representation, encoder, decoder):
+def test(args, output_file, test_instance, test_sep, test_comb, actn_v, input_representation, encoder, decoder):
 	
 	state_step1 = struct_constraints_state()
 	state_step2 = relation_constraints_state()
@@ -242,12 +242,12 @@ def test(args, output_file, test_instance, test_comb, actn_v, input_representati
 		for j, instance in enumerate(test_instance):
 			print j
 			test_input_t = input_representation(instance, singleton_idx_dict=None, train=False)
-			test_enc_rep_t, test_copy_rep_t, test_hidden_t= encoder(test_input_t, test_comb[j], train=False)
+			test_word_rep_t, test_sent_rep_t, test_copy_rep_t, test_hidden_t= encoder(test_input_t, test_comb[j], test_sep[j], train=False)
 
 			#step 1
 			test_hidden_step1 = (test_hidden_t[0].view(args.action_n_layer, 1, -1), test_hidden_t[1].view(args.action_n_layer, 1, -1))
 			state_step1.reset()
-			test_output_step1, test_hidden_rep_step1, test_hidden_step1 = decoder(actn_v.toidx("<START>"), test_hidden_step1, test_enc_rep_t, copy_rep_t=None, train=False, state=state_step1, opt=1)
+			test_output_step1, test_hidden_rep_step1, test_hidden_step1 = decoder(actn_v.toidx("<START>"), test_hidden_step1, test_word_rep_t, test_sent_rep_t, copy_rep_t=None, train=False, state=state_step1, opt=1)
 		
 			#print test_output_step1	
 			#print [actn_v.totok(x) for x in test_output_step1]
@@ -267,7 +267,7 @@ def test(args, output_file, test_instance, test_comb, actn_v, input_representati
 					act2 = test_output_step1[k+1]
 				if actn_v.totok(act1) in ["DRS(", "SDRS("]:
 					state_step2.reset_condition(act1, act2)
-					one_test_output_step2, one_test_hidden_rep_step2, test_hidden_step2, partial_state = decoder(test_hidden_rep_step1[k], test_hidden_step2, test_enc_rep_t, copy_rep_t=test_copy_rep_t, train=False, state=state_step2, opt=2)
+					one_test_output_step2, one_test_hidden_rep_step2, test_hidden_step2, partial_state = decoder(test_hidden_rep_step1[k], test_hidden_step2, test_word_rep_t, test_sent_rep_t, copy_rep_t=test_copy_rep_t, train=False, state=state_step2, opt=2)
 					test_output_step2.append(one_test_output_step2)
 					test_hidden_rep_step2.append(one_test_hidden_rep_step2)
 					#partial_state is to store how many relation it already has
@@ -305,7 +305,7 @@ def test(args, output_file, test_instance, test_comb, actn_v, input_representati
 						#print test_hidden_rep_step2[k][kk]
 						#print test_hidden_step3
 						#print "========================="
-						one_test_output_step3, _, test_hidden_step3, partial_state = decoder(test_hidden_rep_step2[k][kk], test_hidden_step3, test_enc_rep_t, copy_rep_t=None, train=False, state=state_step3, opt=3)
+						one_test_output_step3, _, test_hidden_step3, partial_state = decoder(test_hidden_rep_step2[k][kk], test_hidden_step3, test_word_rep_t, test_sent_rep_t, copy_rep_t=None, train=False, state=state_step3, opt=3)
 						test_output_step3.append(one_test_output_step3)
 						#partial state is to store how many variable it already has
 						state_step3.x, state_step3.e, state_step3.s, state_step3.t = partial_state
@@ -373,9 +373,8 @@ def run_test(args):
 	actn_v.read_file(args.action_dict_path)
 	actn_v.freeze()
 
-	test_input = read_input(args.test_input)
-	test_comb = [ get_same_lemma(x[1]) for x in test_input]
-
+	test_input, test_sep = read_input(args.test_input)
+	test_comb = [ get_same_lemma(x) for x in zip(test_input,test_sep)]
 	extra_vl = [ vocabulary() for i in range(len(test_input[0])-1)]
 	for i in range(len(test_input[0])-1):
 		extra_vl[i].read_file(args.model_path_base+"/extra."+str(i+1)+".list")
@@ -433,7 +432,7 @@ def run_test(args):
 	
 	test_instance, word_v, char_v, extra_vl = input2instance(test_input, word_v, char_v, pretrain, extra_vl, {}, args, "dev")
 	
-	test(args, args.test_output, test_instance, test_comb, actn_v, input_representation, encoder, decoder)
+	test(args, args.test_output, test_instance, test_sep, test_comb, actn_v, input_representation, encoder, decoder)
 	
 def run_check(args):
 
@@ -621,17 +620,12 @@ if __name__ == "__main__":
 	assign_hypers(subparser, hypers)
 	subparser.add_argument("--numpy-seed", type=int)
 	subparser.add_argument("--model-path-base", required=True)
-	subparser.add_argument("--dev-output-path-base", required=True)
-	subparser.add_argument("--train-input", default="data/02-21.input")
-	subparser.add_argument("--train-action", default="data/02-21.action")
-	subparser.add_argument("--dev-input", default="data/22.input")
-	subparser.add_argument("--dev-action", default="data/22.gold")
-	subparser.add_argument("--dev-output", default="data/22.auto.clean.notop")
-	subparser.add_argument("--batch-size", type=int, default=250)
+	subparser.add_argument("--train-input", required=True)
+	subparser.add_argument("--train-action", required=True)
+	subparser.add_argument("--batch-size", type=int, default=1)
 	subparser.add_argument("--beam-size", type=int, default=1)
 	subparser.add_argument("--check-per-update", type=int, default=1000)
 	subparser.add_argument("--eval-per-update", type=int, default=30000)
-	subparser.add_argument("--eval-path-base", default="EVALB")
 	subparser.add_argument("--encoder", default="BILSTM", help="BILSTM, Transformer")
 	subparser.add_argument("--use-char", action='store_true')
 	subparser.add_argument("--pretrain-path")
