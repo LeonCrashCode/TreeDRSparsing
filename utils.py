@@ -172,7 +172,7 @@ def tree2action(output, actn_v):
 	return actions
 import re
 def is_struct(tok):
-	if tok in ["DRS(", "SDRS(", "NOT(", "POS(", "NEC(", "IMP(", "OR(", "DUP("]:
+	if tok in ["DRS(", "DRS-N(", "DRS-S(", "SDRS(", "NOT(", "POS(", "NEC(", "IMP(", "OR(", "DUP("]:
 		return True
 	if re.match("^[PK][0-9]+\($", tok):
 		return True
@@ -183,10 +183,13 @@ def get_struct_rel_var(tree, actn_v):
 	input list of string
 	return list of index
 	"""
+	current_pointer = [0]
 	struct = [actn_v.toidx("<START>")]
-	pointer = [-1]
+	struct_pointer = [-1]
 	relation = []
+	relation_pointer = []
 	variable = []
+	variable_pointer = []
 	def travel(root):
 		parent = root[0]
 		child = root[1:]
@@ -194,25 +197,30 @@ def get_struct_rel_var(tree, actn_v):
 			if is_struct(parent):
 				if parent == "DRS-N(":
 					struct.append(actn_v.toidx("DRS("))
-					pointer.append(pointer[-1]+1)
+					current_pointer[0] += 1
 				elif parent == "DRS-S(":
 					struct.append(actn_v.toidx("DRS("))
-					pointer.append(pointer[-1])
 				else:
 					struct.append(actn_v.toidx(parent))
+				struct_pointer.append(current_pointer[0])
 				if parent in ["DRS(", "SDRS(", "DRS-N(", "DRS-S("]:
 					relation.append([])
+					relation_pointer.append([])
 					for c in child:
 						if not is_struct(c[0]):
 							if re.match("^\$[0-9]+\($",c[0]):
 								relation[-1].append(c[0])
 							else:
 								relation[-1].append(actn_v.toidx(c[0]))
+							relation_pointer[-1].append(current_pointer[0])
 							variable.append([actn_v.toidx(cc) for cc in c[1:]] + [actn_v.toidx(")")])
+							variable_pointer.append([current_pointer[0] for n in variable[-1]])
 					relation[-1].append(actn_v.toidx(")"))
+					relation_pointer[-1].append(current_pointer[0])
 				for c in child:
 					travel(c)
 				struct.append(actn_v.toidx(")"))
+				struct_pointer.append(current_pointer[0])
 			else:
 				pass
 				#if re.match("^\$[0-9]+\($",parent):
@@ -226,7 +234,21 @@ def get_struct_rel_var(tree, actn_v):
 	
 	travel(tree)
 	#struct.append(actn_v.toidx("<END>"))
-	return [struct, relation, variable, pointer[1:]] # exclude dummy head
+	assert len(struct) == len(struct_pointer) #<START>
+	assert len(variable) == len(variable_pointer)
+	for i in range(len(variable)):
+		assert len(variable[i]) == len(variable_pointer[i])
+	assert len(relation) == len(relation_pointer)
+	for i in range(len(relation)):
+		assert len(relation[i]) == len(relation_pointer[i])
+	#revise pointer for six scopes and p k scopes
+	for i, idx in enumerate(struct):
+		if actn_v.totok(idx) == "DRS(":
+			j = i - 1
+			while j >= 0 and actn_v.totok(struct[j]) != ")" and actn_v.totok(struct[j]) != "DRS(":
+				struct_pointer[j] = struct_pointer[i]
+				j -= 1
+	return [struct, relation, variable, struct_pointer, relation_pointer, variable_pointer] # exclude dummy head
 
 	
 def output2action(train_output, actn_v):

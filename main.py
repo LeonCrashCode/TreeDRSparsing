@@ -11,7 +11,7 @@ from dictionary.vocabulary import vocabulary
 from dictionary.PretrainedEmb import PretrainedEmb
 from representation.sentence_rep import sentence_rep
 
-from encoder.bilstm import encoder_srnn as enc 
+from encoder.bilstm import encoder as enc 
 from decoder.lstm import decoder as dec
 
 from utils import get_k_scope
@@ -154,6 +154,9 @@ def run_train(args):
 	check_loss1 = 0
 	check_loss2 = 0
 	check_loss3 = 0
+	check_loss1_p = 0
+	check_loss2_p = 0
+	check_loss3_p = 0
 	bscore = -1
 	epoch = -1
 	while True:
@@ -174,22 +177,25 @@ def run_train(args):
 		word_rep_t, sent_rep_t, copy_rep_t, hidden_t = encoder(input_t, train_comb[i], train_sep[i], train=True)
 		#step 1
 		hidden_step1 = (hidden_t[0].view(args.action_n_layer, 1, -1), hidden_t[1].view(args.action_n_layer, 1, -1))
-		loss_t1, hidden_rep_t, hidden_step1 = decoder(train_action[i][0], hidden_step1, word_rep_t, sent_rep_t, copy_rep_t=None, train=True, state=None, opt=1)
+		loss_t1, loss_p_t1, hidden_rep_t, hidden_step1 = decoder(train_action[i][0], hidden_step1, word_rep_t, sent_rep_t, pointer=train_action[i][3], copy_rep_t=None, train=True, state=None, opt=1)
 		check_loss1 += loss_t1.data.tolist()
+		check_loss1_p += loss_p_t1.data.tolist()
 		
 		#step 2
 		idx = 0
 		hidden_step2 = (hidden_t[0].view(args.action_n_layer, 1, -1), hidden_t[1].view(args.action_n_layer, 1, -1))
 		train_action_step2 = []
+		train_pointer_step2 = []
 		for j in range(len(train_action[i][0])): #<START> DRS( P1(
 			tok = train_action[i][0][j]
 			if actn_v.totok(tok) in ["DRS(", "SDRS("]:
 				train_action_step2.append([hidden_rep_t[j], train_action[i][1][idx]])
+				train_pointer_step2 += train_action[i][4][idx]
 				idx += 1
 		assert idx == len(train_action[i][1])
-		loss_t2, hidden_rep_t, hidden_step2 = decoder(train_action_step2, hidden_step2, word_rep_t, sent_rep_t, copy_rep_t=copy_rep_t, train=True, state=None, opt=2)
+		loss_t2, loss_p_t2, hidden_rep_t, hidden_step2 = decoder(train_action_step2, hidden_step2, word_rep_t, sent_rep_t, pointer=train_pointer_step2, copy_rep_t=copy_rep_t, train=True, state=None, opt=2)
 		check_loss2 += loss_t2.data.tolist()
-		
+		check_loss2_p += loss_p_t2.data.tolist()
 		#step 3
 		flat_train_action = [0] # <START>
 		for l in train_action[i][1]:
@@ -198,24 +204,31 @@ def run_train(args):
 		idx = 0
 		hidden_step3 = (hidden_t[0].view(args.action_n_layer, 1, -1), hidden_t[1].view(args.action_n_layer, 1, -1))
 		train_action_step3 = []
+		train_pointer_step3 = []
 		for j in range(len(flat_train_action)):
 			tok = flat_train_action[j]
 			#print tok
 			if (type(tok) == types.StringType and tok[-1] == "(") or actn_v.totok(tok)[-1] == "(":
 				train_action_step3.append([hidden_rep_t[j], train_action[i][2][idx]])
+				train_pointer_step3 += train_action[i][5][idx]
 				idx += 1
 		assert idx == len(train_action[i][2])
-		loss_t3, hidden_rep_t, hidden_step3 = decoder(train_action_step3, hidden_step3, word_rep_t, sent_rep_t, copy_rep_t=None, train=True, state=None, opt=3)
+		loss_t3, loss_p_t3, hidden_rep_t, hidden_step3 = decoder(train_action_step3, hidden_step3, word_rep_t, sent_rep_t, pointer=train_pointer_step3, copy_rep_t=None, train=True, state=None, opt=3)
 		check_loss3 += loss_t3.data.tolist()
+		check_loss3_p += loss_p_t3.data.tolist()
 
 		if check_iter % args.check_per_update == 0:
-			print('epoch %.6f : structure %.10f, relation %.10f, variable %.10f, [lr: %.6f]' % (check_iter*1.0/len(train_instance), check_loss1*1.0 / args.check_per_update, check_loss2*1.0 / args.check_per_update, check_loss3*1.0 / args.check_per_update, lr))
+			print('epoch %.3f : structure %.5f, relation %.5f, variable %.5f, str_p %.5f, rel_p %.5f, var_p %.5f' % (check_iter*1.0/len(train_instance), check_loss1*1.0 / args.check_per_update, check_loss2*1.0 / args.check_per_update, check_loss3*1.0 / args.check_per_update, check_loss1_p*1.0 / args.check_per_update, check_loss2_p*1.0 / args.check_per_update, check_loss3_p*1.0 / args.check_per_update))
 			check_loss1 = 0
 			check_loss2 = 0
 			check_loss3 = 0
+
+			check_loss1_p = 0
+			check_loss2_p = 0
+			check_loss3_p = 0
 		
 		i += 1
-		loss_t = loss_t1 + loss_t2 + loss_t3
+		loss_t = loss_t1 + loss_t2 + loss_t3 + loss_p_t1 + loss_p_t2 + loss_p_t3
 		loss_t.backward()
 		torch.nn.utils.clip_grad_value_(model_parameters, 5)
 
@@ -247,7 +260,7 @@ def test(args, output_file, test_instance, test_sep, test_comb, actn_v, input_re
 			#step 1
 			test_hidden_step1 = (test_hidden_t[0].view(args.action_n_layer, 1, -1), test_hidden_t[1].view(args.action_n_layer, 1, -1))
 			state_step1.reset()
-			test_output_step1, test_hidden_rep_step1, test_hidden_step1 = decoder(actn_v.toidx("<START>"), test_hidden_step1, test_word_rep_t, test_sent_rep_t, copy_rep_t=None, train=False, state=state_step1, opt=1)
+			test_output_step1, test_hidden_rep_step1, test_hidden_step1 = decoder(actn_v.toidx("<START>"), test_hidden_step1, test_word_rep_t, test_sent_rep_t, pointer=None, copy_rep_t=None, train=False, state=state_step1, opt=1)
 		
 			#print test_output_step1	
 			#print [actn_v.totok(x) for x in test_output_step1]
@@ -267,7 +280,7 @@ def test(args, output_file, test_instance, test_sep, test_comb, actn_v, input_re
 					act2 = test_output_step1[k+1]
 				if actn_v.totok(act1) in ["DRS(", "SDRS("]:
 					state_step2.reset_condition(act1, act2)
-					one_test_output_step2, one_test_hidden_rep_step2, test_hidden_step2, partial_state = decoder(test_hidden_rep_step1[k], test_hidden_step2, test_word_rep_t, test_sent_rep_t, copy_rep_t=test_copy_rep_t, train=False, state=state_step2, opt=2)
+					one_test_output_step2, one_test_hidden_rep_step2, test_hidden_step2, partial_state = decoder(test_hidden_rep_step1[k], test_hidden_step2, test_word_rep_t, test_sent_rep_t, pointer=None, copy_rep_t=test_copy_rep_t, train=False, state=state_step2, opt=2)
 					test_output_step2.append(one_test_output_step2)
 					test_hidden_rep_step2.append(one_test_hidden_rep_step2)
 					#partial_state is to store how many relation it already has
@@ -305,7 +318,7 @@ def test(args, output_file, test_instance, test_sep, test_comb, actn_v, input_re
 						#print test_hidden_rep_step2[k][kk]
 						#print test_hidden_step3
 						#print "========================="
-						one_test_output_step3, _, test_hidden_step3, partial_state = decoder(test_hidden_rep_step2[k][kk], test_hidden_step3, test_word_rep_t, test_sent_rep_t, copy_rep_t=None, train=False, state=state_step3, opt=3)
+						one_test_output_step3, _, test_hidden_step3, partial_state = decoder(test_hidden_rep_step2[k][kk], test_hidden_step3, test_word_rep_t, test_sent_rep_t, pointer=None, copy_rep_t=None, train=False, state=state_step3, opt=3)
 						test_output_step3.append(one_test_output_step3)
 						#partial state is to store how many variable it already has
 						state_step3.x, state_step3.e, state_step3.s, state_step3.t = partial_state
