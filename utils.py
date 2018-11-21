@@ -1,17 +1,24 @@
 # -*- coding: utf-8 -*-
 def read_input(filename):
 	data = [[]]
+	seps = [[]]
 	for line in open(filename):
 		line = line.strip()
 		if line == "":
 			data.append([])
+			seps.append([])
 		else:
 			if line[0] == "#":
 				continue
 			data[-1].append(["<s>"] + line.split() + ["</s>"])
+			if len(seps[-1]) == 0:
+				for i, w in enumerate(data[-1][-1]):
+					if w in ["<s>", "</s>", "|||"]:
+						seps[-1].append(i)
 	if len(data[-1]) == 0:
 		data.pop()
-	return data
+		seps.pop()
+	return data, seps
 
 def get_singleton_dict(train_input, word_v):
 	d = {}
@@ -177,6 +184,7 @@ def get_struct_rel_var(tree, actn_v):
 	return list of index
 	"""
 	struct = [actn_v.toidx("<START>")]
+	pointer = [-1]
 	relation = []
 	variable = []
 	def travel(root):
@@ -184,8 +192,15 @@ def get_struct_rel_var(tree, actn_v):
 		child = root[1:]
 		if parent[-1] == "(":
 			if is_struct(parent):
-				struct.append(actn_v.toidx(parent))
-				if parent in ["DRS(", "SDRS("]:
+				if parent == "DRS-N(":
+					struct.append(actn_v.toidx("DRS("))
+					pointer.append(pointer[-1]+1)
+				elif parent == "DRS-S(":
+					struct.append(actn_v.toidx("DRS("))
+					pointer.append(pointer[-1])
+				else:
+					struct.append(actn_v.toidx(parent))
+				if parent in ["DRS(", "SDRS(", "DRS-N(", "DRS-S("]:
 					relation.append([])
 					for c in child:
 						if not is_struct(c[0]):
@@ -211,7 +226,7 @@ def get_struct_rel_var(tree, actn_v):
 	
 	travel(tree)
 	#struct.append(actn_v.toidx("<END>"))
-	return [struct, relation, variable]
+	return [struct, relation, variable, pointer[1:]] # exclude dummy head
 
 	
 def output2action(train_output, actn_v):
@@ -248,17 +263,38 @@ def output2action_cpy(train_output, actn_v):
 				train_action[-1].append(idx)
 	return train_action
 
-def get_same_lemma(lemmas):
+def get_same_lemma(packed):
 	"""
 	get matrix that indicates which lemmas are the same
 	"""
-	comb = []
-	for vi in lemmas:
-		comb.append([])
-		for j, vj in enumerate(lemmas):
-			if vi == vj:
-				comb[-1].append(j)
-	return comb
+	lemmas = packed[0][1]
+	seps = packed[1]
+
+	combs = []
+	for i in range(len(seps)-1):
+		# for one sentence
+		s = seps[i]
+		e = seps[i+1]
+
+		idx_outra = s
+
+		j = s+1
+		past_lemmas = []
+		comb = []
+		while j < e:
+			current_lem = lemmas[j]
+			j += 1
+			if current_lem in past_lemmas:
+				continue
+			past_lemmas.append(current_lem)
+			comb.append([])
+			k = s+1
+			while k < e:
+				if current_lem == lemmas[k]:
+					comb[-1].append(k)
+				k += 1
+		combs.append(comb)
+	return combs
 
 def get_k_scope(output, actn_v):
 	stack = []

@@ -68,9 +68,9 @@ def run_train(args):
 	#print actn_v.size()
 	actn_v.freeze()
 	#instances
-	train_input = read_input(args.train_input)
+	train_input, train_sep = read_input(args.train_input)
 	#print train_input[0]
-	train_comb = [ get_same_lemma(x[1]) for x in train_input]
+	train_comb = [ get_same_lemma(x) for x in zip(train_input, train_sep)]
 	#dev_input = read_input(args.dev_input)
 	#dev_comb = [ get_same_lemma(x[1]) for x in dev_input]
 
@@ -171,10 +171,10 @@ def run_train(args):
 
 		check_iter += 1
 		input_t = input_representation(train_instance[i], singleton_idx_dict=singleton_idx_dict, train=True)
-		enc_rep_t, copy_rep_t, hidden_t = encoder(input_t, train_comb[i], train=True)
+		enc_rep_t, sent_rep_t, copy_rep_t, hidden_t = encoder(input_t, train_comb[i], sep[i], train=True)
 		#step 1
 		hidden_step1 = (hidden_t[0].view(args.action_n_layer, 1, -1), hidden_t[1].view(args.action_n_layer, 1, -1))
-		loss_t1, hidden_rep_t, hidden_step1 = decoder(train_action[i][0], hidden_step1, enc_rep_t, copy_rep_t=None, train=True, state=None, opt=1)
+		loss_t1, hidden_rep_t, hidden_step1 = decoder(train_action[i][0], hidden_step1, enc_rep_t, sent_rep_t=sent_rep_t, pointer= train_action[i][-1], copy_rep_t=None, train=True, state=None, opt=1)
 		check_loss1 += loss_t1.data.tolist()
 		
 		#step 2
