@@ -106,7 +106,7 @@ class decoder(nn.Module):
 			p_log_softmax_t = F.log_softmax(p_attn_scores_t, 1)
 			pointer_g_t = torch.LongTensor(pointer[1:])
 			if self.args.gpu:
-				pointer_g_t = action_g_t.cuda()
+				pointer_g_t = pointer_g_t.cuda()
 			loss_p_t = self.criterion(p_log_softmax_t, pointer_g_t)
 
 			return loss_t, loss_p_t, output, hidden
@@ -360,7 +360,7 @@ class decoder(nn.Module):
 			p_log_softmax_t = F.log_softmax(p_attn_scores_t, 1)
 			pointer_g_t = torch.LongTensor(pointer)
 			if self.args.gpu:
-				pointer_g_t = action_g_t.cuda()
+				pointer_g_t = pointer_g_t.cuda()
 			loss_p_t = self.criterion(p_log_softmax_t, pointer_g_t)
 
 			return loss_t, loss_p_t, output, hidden
@@ -616,7 +616,7 @@ class decoder(nn.Module):
 			p_log_softmax_t = F.log_softmax(p_attn_scores_t, 1)
 			pointer_g_t = torch.LongTensor(pointer)
 			if self.args.gpu:
-				pointer_g_t = action_g_t.cuda()
+				pointer_g_t = pointer_g_t.cuda()
 			loss_p_t = self.criterion(p_log_softmax_t, pointer_g_t)
 
 			return loss_t, loss_p_t, output, hidden
