@@ -11,7 +11,7 @@ from dictionary.vocabulary import vocabulary
 from dictionary.PretrainedEmb import PretrainedEmb
 from representation.sentence_rep import sentence_rep
 
-from encoder.bilstm import encoder_srnn as enc 
+from encoder.bilstm import encoder as enc 
 from decoder.lstm import decoder as dec
 
 from utils import get_k_scope
