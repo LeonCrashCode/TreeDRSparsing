@@ -12,7 +12,7 @@ from dictionary.PretrainedEmb import PretrainedEmb
 from representation.sentence_rep import sentence_rep
 
 from encoder.bilstm import encoder as enc 
-from decoder.lstm import decoder as dec
+from decoder.lstm import decoder_soft as dec
 
 from utils import get_k_scope
 from utils import get_p_max
