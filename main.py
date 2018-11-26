@@ -188,10 +188,14 @@ def run_train(args):
 		#train_pointer_step2 = []
 		for j in range(len(train_action[i][0])): #<START> DRS( P1(
 			tok = train_action[i][0][j]
-			if actn_v.totok(tok) in ["DRS(", "SDRS("]:
-				train_action_step2.append([hidden_rep_t[j], train_action[i][1][idx]])
+			if actn_v.totok(tok) == "DRS(":
+				train_action_step2.append([hidden_rep_t[j], train_action[i][1][idx], train_action[i][4][idx][0]])
 				#train_pointer_step2 += train_action[i][4][idx]
 				idx += 1
+			elif actn_v.totok(tok) == "SDRS(":
+				train_action_step2.append([hidden_rep_t[j], train_action[i][1][idx], -1])
+				idx += 1
+
 		assert idx == len(train_action[i][1])
 		loss_t2, hidden_rep_t, hidden_step2 = decoder(train_action_step2, hidden_step2, word_rep_t, sent_rep_t, pointer=None, copy_rep_t=copy_rep_t, train=True, state=None, opt=2)
 		check_loss2 += loss_t2.data.tolist()
@@ -228,7 +232,7 @@ def run_train(args):
 			#check_loss3_p = 0
 		
 		i += 1
-		loss_t = loss_t1 + loss_t2 + loss_t3 + loss_p_t1 + loss_p_t2 + loss_p_t3
+		loss_t = loss_t1 + loss_t2 + loss_t3 + loss_p_t1
 		loss_t.backward()
 		torch.nn.utils.clip_grad_value_(model_parameters, 5)
 
@@ -260,8 +264,7 @@ def test(args, output_file, test_instance, test_sep, test_comb, actn_v, input_re
 			#step 1
 			test_hidden_step1 = (test_hidden_t[0].view(args.action_n_layer, 1, -1), test_hidden_t[1].view(args.action_n_layer, 1, -1))
 			state_step1.reset()
-			test_output_step1, test_hidden_rep_step1, test_hidden_step1 = decoder(actn_v.toidx("<START>"), test_hidden_step1, test_word_rep_t, test_sent_rep_t, pointer=None, copy_rep_t=None, train=False, state=state_step1, opt=1)
-		
+			test_output_step1, test_pointers_step1, test_hidden_rep_step1, test_hidden_step1 = decoder(actn_v.toidx("<START>"), test_hidden_step1, test_word_rep_t, test_sent_rep_t, pointer=None, copy_rep_t=None, train=False, state=state_step1, opt=1)
 			#print test_output_step1	
 			#print [actn_v.totok(x) for x in test_output_step1]
 			#print test_hidden_rep_step1
@@ -272,19 +275,33 @@ def test(args, output_file, test_instance, test_sep, test_comb, actn_v, input_re
 			test_hidden_rep_step2 = []
 			test_hidden_step2 = (test_hidden_t[0].view(args.action_n_layer, 1, -1), test_hidden_t[1].view(args.action_n_layer, 1, -1))
 			
-			state_step2.reset_length(test_copy_rep_t.size(0)) # <s> </s>
+			state_step2.reset() # <s> </s>
+			drs_idx = 0
 			for k in range(len(test_output_step1)): # DRS( P1(
 				act1 = test_output_step1[k]
 				act2 = None
 				if k + 1 < len(test_output_step1):
 					act2 = test_output_step1[k+1]
-				if actn_v.totok(act1) in ["DRS(", "SDRS("]:
+				if actn_v.totok(act1) == "DRS(":
+					#print "DRS",test_pointers_step1[drs_idx]
+					state_step2.reset_length(test_copy_rep_t[test_pointers_step1[drs_idx]].size(0))
 					state_step2.reset_condition(act1, act2)
-					one_test_output_step2, one_test_hidden_rep_step2, test_hidden_step2, partial_state = decoder(test_hidden_rep_step1[k], test_hidden_step2, test_word_rep_t, test_sent_rep_t, pointer=None, copy_rep_t=test_copy_rep_t, train=False, state=state_step2, opt=2)
+					one_test_output_step2, one_test_hidden_rep_step2, test_hidden_step2, partial_state = decoder([test_hidden_rep_step1[k],test_pointers_step1[drs_idx]], test_hidden_step2, test_word_rep_t, test_sent_rep_t, pointer=None, copy_rep_t=test_copy_rep_t, train=False, state=state_step2, opt=2)
 					test_output_step2.append(one_test_output_step2)
 					test_hidden_rep_step2.append(one_test_hidden_rep_step2)
 					#partial_state is to store how many relation it already has
 					state_step2.rel_g, state_step2.d_rel_g = partial_state
+					drs_idx += 1
+				if actn_v.totok(act1) == "SDRS(":
+					#print "SDRS"
+					state_step2.reset_length(0)
+					state_step2.reset_condition(act1, act2)
+					one_test_output_step2, one_test_hidden_rep_step2, test_hidden_step2, partial_state = decoder([test_hidden_rep_step1[k],-1], test_hidden_step2, test_word_rep_t, test_sent_rep_t, pointer=None, copy_rep_t=test_copy_rep_t, train=False, state=state_step2, opt=2)
+					test_output_step2.append(one_test_output_step2)
+					test_hidden_rep_step2.append(one_test_hidden_rep_step2)
+					#partial_state is to store how many relation it already has
+					state_step2.rel_g, state_step2.d_rel_g = partial_state
+					
 					#print test_hidden_step2
 
 					#print one_test_hidden_rep_step2

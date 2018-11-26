@@ -92,9 +92,9 @@ class encoder_srnn(nn.Module):
         shidden_t = self.inithidden()
         sent_rep, _ = self.sent_lstm(self.word2sent(sent_rep), shidden_t)
         #output_t is 1 x n x H, where n = n0 + n1
-        #copy_rep is [1 x ni x H], m list
+        #copy_rep is [ni x H], m list
         #sent_rep is 1 x m x H
-        return output_t.transpose(0,1), sent_rep.transpose(0,1), copy_rep_s, hidden_t
+        return output_t.transpose(0, 1), sent_rep.transpose(0, 1), copy_rep_s, hidden_t
 
     def inithidden(self):
         if self.args.gpu:

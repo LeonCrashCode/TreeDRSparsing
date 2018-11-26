@@ -172,7 +172,9 @@ def tree2action(output, actn_v):
 	return actions
 import re
 def is_struct(tok):
-	if tok in ["DRS(", "DRS-N(", "DRS-S(", "SDRS(", "NOT(", "POS(", "NEC(", "IMP(", "OR(", "DUP("]:
+	if tok in ["DRS(", "SDRS(", "NOT(", "POS(", "NEC(", "IMP(", "OR(", "DUP("]:
+		return True
+	if re.match("^DRS-[0-9]+\($", tok):
 		return True
 	if re.match("^[PK][0-9]+\($", tok):
 		return True
@@ -195,15 +197,13 @@ def get_struct_rel_var(tree, actn_v):
 		child = root[1:]
 		if parent[-1] == "(":
 			if is_struct(parent):
-				if parent == "DRS-N(":
+				if re.match("^DRS-[0-9]+\($",parent):
 					struct.append(actn_v.toidx("DRS("))
-					current_pointer[0] += 1
-				elif parent == "DRS-S(":
-					struct.append(actn_v.toidx("DRS("))
+					current_pointer[0] = int(parent[4:-1])
 				else:
 					struct.append(actn_v.toidx(parent))
 				struct_pointer.append(current_pointer[0])
-				if parent in ["DRS(", "SDRS(", "DRS-N(", "DRS-S("]:
+				if (parent in ["DRS(", "SDRS("]) or re.match("^DRS-[0-9]+\($",parent):
 					relation.append([])
 					relation_pointer.append([])
 					for c in child:

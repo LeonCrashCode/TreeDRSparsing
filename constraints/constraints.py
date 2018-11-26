@@ -205,10 +205,11 @@ class struct_constraints:
 class relation_constraints_state:
 	def __init__(self):
 		pass
-	def reset_length(self, copy_length):
-		self.copy_length = copy_length
+	def reset(self):
 		self.rel_g = 0
 		self.d_rel_g = 0
+	def reset_length(self, copy_length):
+		self.copy_length = copy_length
 	def reset_condition(self, cond, cond2):
 		self.cond = cond
 		self.cond2 = cond2
