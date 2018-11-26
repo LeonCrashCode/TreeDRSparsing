@@ -185,17 +185,17 @@ def run_train(args):
 		idx = 0
 		hidden_step2 = (hidden_t[0].view(args.action_n_layer, 1, -1), hidden_t[1].view(args.action_n_layer, 1, -1))
 		train_action_step2 = []
-		train_pointer_step2 = []
+		#train_pointer_step2 = []
 		for j in range(len(train_action[i][0])): #<START> DRS( P1(
 			tok = train_action[i][0][j]
 			if actn_v.totok(tok) in ["DRS(", "SDRS("]:
 				train_action_step2.append([hidden_rep_t[j], train_action[i][1][idx]])
-				train_pointer_step2 += train_action[i][4][idx]
+				#train_pointer_step2 += train_action[i][4][idx]
 				idx += 1
 		assert idx == len(train_action[i][1])
-		loss_t2, loss_p_t2, hidden_rep_t, hidden_step2 = decoder(train_action_step2, hidden_step2, word_rep_t, sent_rep_t, pointer=train_pointer_step2, copy_rep_t=copy_rep_t, train=True, state=None, opt=2)
+		loss_t2, hidden_rep_t, hidden_step2 = decoder(train_action_step2, hidden_step2, word_rep_t, sent_rep_t, pointer=None, copy_rep_t=copy_rep_t, train=True, state=None, opt=2)
 		check_loss2 += loss_t2.data.tolist()
-		check_loss2_p += loss_p_t2.data.tolist()
+		#check_loss2_p += loss_p_t2.data.tolist()
 		#step 3
 		flat_train_action = [0] # <START>
 		for l in train_action[i][1]:
@@ -204,28 +204,28 @@ def run_train(args):
 		idx = 0
 		hidden_step3 = (hidden_t[0].view(args.action_n_layer, 1, -1), hidden_t[1].view(args.action_n_layer, 1, -1))
 		train_action_step3 = []
-		train_pointer_step3 = []
+		#train_pointer_step3 = []
 		for j in range(len(flat_train_action)):
 			tok = flat_train_action[j]
 			#print tok
 			if (type(tok) == types.StringType and tok[-1] == "(") or actn_v.totok(tok)[-1] == "(":
 				train_action_step3.append([hidden_rep_t[j], train_action[i][2][idx]])
-				train_pointer_step3 += train_action[i][5][idx]
+				#train_pointer_step3 += train_action[i][5][idx]
 				idx += 1
 		assert idx == len(train_action[i][2])
-		loss_t3, loss_p_t3, hidden_rep_t, hidden_step3 = decoder(train_action_step3, hidden_step3, word_rep_t, sent_rep_t, pointer=train_pointer_step3, copy_rep_t=None, train=True, state=None, opt=3)
+		loss_t3, hidden_rep_t, hidden_step3 = decoder(train_action_step3, hidden_step3, word_rep_t, sent_rep_t, pointer=None, copy_rep_t=None, train=True, state=None, opt=3)
 		check_loss3 += loss_t3.data.tolist()
-		check_loss3_p += loss_p_t3.data.tolist()
+		#check_loss3_p += loss_p_t3.data.tolist()
 
 		if check_iter % args.check_per_update == 0:
-			print('epoch %.3f : structure %.5f, relation %.5f, variable %.5f, str_p %.5f, rel_p %.5f, var_p %.5f' % (check_iter*1.0/len(train_instance), check_loss1*1.0 / args.check_per_update, check_loss2*1.0 / args.check_per_update, check_loss3*1.0 / args.check_per_update, check_loss1_p*1.0 / args.check_per_update, check_loss2_p*1.0 / args.check_per_update, check_loss3_p*1.0 / args.check_per_update))
+			print('epoch %.3f : structure %.5f, relation %.5f, variable %.5f, str_p %.5f' % (check_iter*1.0/len(train_instance), check_loss1*1.0 / args.check_per_update, check_loss2*1.0 / args.check_per_update, check_loss3*1.0 / args.check_per_update, check_loss1_p*1.0 / args.check_per_update))
 			check_loss1 = 0
 			check_loss2 = 0
 			check_loss3 = 0
 
 			check_loss1_p = 0
-			check_loss2_p = 0
-			check_loss3_p = 0
+			#check_loss2_p = 0
+			#check_loss3_p = 0
 		
 		i += 1
 		loss_t = loss_t1 + loss_t2 + loss_t3 + loss_p_t1 + loss_p_t2 + loss_p_t3

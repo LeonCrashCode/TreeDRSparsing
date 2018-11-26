@@ -248,7 +248,7 @@ def get_struct_rel_var(tree, actn_v):
 			while j >= 0 and actn_v.totok(struct[j]) != ")" and actn_v.totok(struct[j]) != "DRS(":
 				struct_pointer[j] = struct_pointer[i]
 				j -= 1
-	return [struct, relation, variable, struct_pointer, relation_pointer, variable_pointer] # exclude dummy head
+	return [struct, relation, variable, struct_pointer, relation_pointer, variable_pointer] 
 
 	
 def output2action(train_output, actn_v):
@@ -291,19 +291,22 @@ def get_same_lemma(packed):
 	"""
 	lemmas = packed[0][1]
 	seps = packed[1]
-	past_lemmas = []
-	comb = []
-	for i, li in enumerate(lemmas):
-		if i in seps:
-			continue
-		if li in past_lemmas:
-			continue
-		past_lemmas.append(li)
-		comb.append([])
-		for j, lj in enumerate(lemmas):
-			if lj == li:
-				comb[-1].append(j)
-	return comb
+	combs = []
+	for j in range(len(seps)-1):
+		s = seps[j]
+		e = seps[j+1]
+		comb = []
+		past_lemmas = []
+		for i, li in enumerate(lemmas[s+1:e]):
+			if li in past_lemmas:
+				continue
+			past_lemmas.append(li)
+			comb.append([])
+			for k, lk in enumerate(lemmas[s+1:e]):
+				if lk == li:
+					comb[-1].append(k)
+		combs.append(comb)
+	return combs
 
 def get_k_scope(output, actn_v):
 	stack = []

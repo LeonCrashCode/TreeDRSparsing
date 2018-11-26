@@ -36,7 +36,7 @@ class decoder(nn.Module):
 
 		self.lstm = nn.LSTM(self.args.action_dim, self.args.action_hidden_dim, num_layers= self.args.action_n_layer)
 
-		self.feat = nn.Linear(self.args.action_hidden_dim *3 + self.args.action_dim, self.args.action_feature_dim)
+		self.feat = nn.Linear(self.args.action_hidden_dim *2 + self.args.action_dim, self.args.action_feature_dim)
 		self.feat_tanh = nn.Tanh()
 
 		self.out = nn.Linear(self.args.action_feature_dim, self.action_size)
@@ -57,9 +57,9 @@ class decoder(nn.Module):
 		if opt == 1:
 			return self.forward_1(inputs, hidden, word_rep_t, sent_rep_t, pointer, train, state)
 		elif opt == 2:
-			return self.forward_2(inputs, hidden, word_rep_t, sent_rep_t, pointer, copy_rep_t, train, state)
+			return self.forward_2(inputs, hidden, word_rep_t, sent_rep_t, copy_rep_t, train, state)
 		elif opt == 3:
-			return self.forward_3(inputs, hidden, word_rep_t, sent_rep_t, pointer, train, state)
+			return self.forward_3(inputs, hidden, word_rep_t, sent_rep_t, train, state)
 		else:
 			assert False, "unrecognized option"
 	def forward_1(self, input, hidden, word_rep_t, sent_rep_t, pointer, train, state):
@@ -74,6 +74,19 @@ class decoder(nn.Module):
 
 			output, hidden = self.lstm(action_t, hidden)
 
+			assert len(pointer) == len(input)
+
+			p = [] # the pointer of drs node, len(p) equals the number of DRS node
+			drs_output = [] # the index of drs nodes in the input sequence
+			for idrs, drs in enumerate(input[1:]):
+				if self.actn_v.totok(drs) == "DRS(":
+					p.append(pointer[idrs])
+					drs_output.append(output[idrs].unsqueeze(0))
+			drs_output = torch.cat(drs_output,0)
+			print [(self.actn_v.totok(x[0]), x[1]) for x in zip(input,pointer)]
+			print p
+			exit(1)
+
 			#word-level attention
 			w_attn_scores_t = torch.bmm(self.word_head(output).transpose(0,1), word_rep_t.transpose(1,2))[0]
 			w_attn_weights_t = F.softmax(w_attn_scores_t, 1)
@@ -84,13 +97,8 @@ class decoder(nn.Module):
 			s_attn_weights_t = F.softmax(s_attn_scores_t, 1)
 			s_attn_hiddens_t = torch.bmm(s_attn_weights_t.unsqueeze(0), sent_rep_t)[0]
 
-			#pointer-level attention
-			p_attn_hiddens_t = []
-			for p in pointer[1:]:
-				p_attn_hiddens_t.append(sent_rep_t[0][p].view(1,-1))
-			p_attn_hiddens_t = torch.cat(p_attn_hiddens_t, 0)
 
-			feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((w_attn_hiddens_t, s_attn_hiddens_t, p_attn_hiddens_t, action_t.view(output.size(0),-1)), 1)))
+			feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((w_attn_hiddens_t, s_attn_hiddens_t, action_t.view(output.size(0),-1)), 1)))
 			global_scores_t = self.out(feat_hiddens_t)
 
 			log_softmax_output_t = F.log_softmax(global_scores_t, 1)
@@ -102,9 +110,9 @@ class decoder(nn.Module):
 			loss_t = self.criterion(log_softmax_output_t, action_g_t)
 
 			#pointer attention
-			p_attn_scores_t = torch.bmm(self.pointer_head(output).transpose(0,1), sent_rep_t.transpose(1,2))[0]
+			p_attn_scores_t = torch.bmm(self.pointer_head(drs_output).transpose(0,1), sent_rep_t.transpose(1,2))[0]
 			p_log_softmax_t = F.log_softmax(p_attn_scores_t, 1)
-			pointer_g_t = torch.LongTensor(pointer[1:])
+			pointer_g_t = torch.LongTensor(p)
 			if self.args.gpu:
 				pointer_g_t = pointer_g_t.cuda()
 			loss_p_t = self.criterion(p_log_softmax_t, pointer_g_t)
