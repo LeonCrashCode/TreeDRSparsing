@@ -139,7 +139,7 @@ class decoder(nn.Module):
 				p_attn_scores_t = torch.bmm(self.pointer_head(output).transpose(0,1), sent_rep_t.transpose(1,2))[0]
 				_, sent_idx = torch.max(p_attn_scores_t,1)
 				sent_idx = sent_idx.view(-1).data.tolist()[0]
-				p_attn_hiddens_t = torch.bmm(p_attn_weights_t.unsqueeze(0), sent_rep_t[0][sent_idx].view(1,-1))[0]
+				p_attn_hiddens_t = sent_rep_t[0][sent_idx].view(1,-1)
 
 				feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((w_attn_hiddens_t, s_attn_hiddens_t, p_attn_hiddens_t, action_t.view(output.size(0),-1)), 1)))
 				global_scores_t = self.out(feat_hiddens_t)
@@ -392,7 +392,7 @@ class decoder(nn.Module):
 				p_attn_scores_t = torch.bmm(self.pointer_head(output).transpose(0,1), sent_rep_t.transpose(1,2))[0]
 				_, sent_idx = torch.max(p_attn_scores_t,1)
 				sent_idx = sent_idx.view(-1).data.tolist()[0]
-				p_attn_hiddens_t = torch.bmm(p_attn_weights_t.unsqueeze(0), sent_rep_t[0][sent_idx].view(1,-1))[0]
+				p_attn_hiddens_t = sent_rep_t[0][sent_idx].view(1,-1)
 
 				feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((w_attn_hiddens_t, s_attn_hiddens_t, p_attn_hiddens_t, action_t.view(output.size(0),-1)), 1)))
 				global_scores_t = self.out(feat_hiddens_t)
@@ -642,7 +642,7 @@ class decoder(nn.Module):
 				p_attn_scores_t = torch.bmm(self.pointer_head(output).transpose(0,1), sent_rep_t.transpose(1,2))[0]
 				_, sent_idx = torch.max(p_attn_scores_t,1)
 				sent_idx = sent_idx.view(-1).data.tolist()[0]
-				p_attn_hiddens_t = torch.bmm(p_attn_weights_t.unsqueeze(0), sent_rep_t[0][sent_idx].view(1,-1))[0]
+				p_attn_hiddens_t = sent_rep_t[0][sent_idx].view(1,-1)
 
 				feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((w_attn_hiddens_t, s_attn_hiddens_t, p_attn_hiddens_t, action_t.view(output.size(0),-1)), 1)))
 				global_scores_t = self.out(feat_hiddens_t)
