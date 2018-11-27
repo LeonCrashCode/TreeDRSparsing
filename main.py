@@ -354,7 +354,7 @@ def test(args, output_file, test_instance, test_sep, test_comb, actn_v, input_re
 					drs_idx += 1
 				else:
 					test_output.append(actn_v.totok(act1))
-				if test_output[-1] in ["DRS(", "SDRS("]:
+				if (test_output[-1] in ["DRS(", "SDRS("]) or re.match("^DRS-[0-9]+\($", test_output[-1]):
 					for act2 in test_output_step2[k][:-1]:
 						if act2 >= actn_v.size():
 							test_output.append("$"+str(act2-actn_v.size())+"(")
