@@ -346,8 +346,14 @@ def test(args, output_file, test_instance, test_sep, test_comb, actn_v, input_re
 			test_output = []
 			k = 0
 			kk = 0
+			drs_idx = 0
 			for act1 in test_output_step1:
-				test_output.append(actn_v.totok(act1))
+				if actn_v.totok(act1) == "DRS(":
+					assert drs_idx < len(test_pointers_step1)
+					test_output.append("DRS-"+str(test_pointers_step1[drs_idx])+"(")
+					drs_idx += 1
+				else:
+					test_output.append(actn_v.totok(act1))
 				if test_output[-1] in ["DRS(", "SDRS("]:
 					for act2 in test_output_step2[k][:-1]:
 						if act2 >= actn_v.size():
@@ -360,6 +366,7 @@ def test(args, output_file, test_instance, test_sep, test_comb, actn_v, input_re
 					k += 1
 			w.write(" ".join(test_output) + "\n")
 			w.flush()
+			assert drs_idx == len(test_pointers_step1)
 		w.close()
 
 
