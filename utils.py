@@ -203,6 +203,13 @@ def get_struct_rel_var(tree, actn_v):
 				else:
 					struct.append(actn_v.toidx(parent))
 				struct_pointer.append(current_pointer[0])
+
+				if (parent in ["NOT(", "POS(", "NEC(", "IMP(", "OR(", "DUP("]) or re.match("^P[0-9]+\($", parent):
+					p = child[0]
+					child = child[1:]
+					struct.append(actn_v.toidx(p))
+					struct_pointer.append(current_pointer[0])
+
 				if (parent in ["DRS(", "SDRS("]) or re.match("^DRS-[0-9]+\($",parent):
 					relation.append([])
 					relation_pointer.append([])
@@ -213,7 +220,15 @@ def get_struct_rel_var(tree, actn_v):
 							else:
 								relation[-1].append(actn_v.toidx(c[0]))
 							relation_pointer[-1].append(current_pointer[0])
-							variable.append([actn_v.toidx(cc) for cc in c[1:]] + [actn_v.toidx(")")])
+
+							variable.append([])
+							for cc in c[1:]:
+								if re.match("^\$[0-9]+\($",cc):
+									variable[-1].append(cc)
+								else:
+									variable[-1].append(actn_v.toidx(cc))
+							variable[-1].append(actn_v.toidx(")"))
+							#variable.append([actn_v.toidx(cc) for cc in c[1:]] + [actn_v.toidx(")")])
 							variable_pointer.append([current_pointer[0] for n in variable[-1]])
 					relation[-1].append(actn_v.toidx(")"))
 					relation_pointer[-1].append(current_pointer[0])
@@ -241,7 +256,7 @@ def get_struct_rel_var(tree, actn_v):
 	assert len(relation) == len(relation_pointer)
 	for i in range(len(relation)):
 		assert len(relation[i]) == len(relation_pointer[i])
-	#revise pointer for six scopes and p k scopes
+	#revise pointer for six scopes and p k scopes, may be incorrect!!!
 	for i, idx in enumerate(struct):
 		if actn_v.totok(idx) == "DRS(":
 			j = i - 1

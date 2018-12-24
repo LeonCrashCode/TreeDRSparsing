@@ -43,22 +43,31 @@ def run_train(args):
 
 	actn_v.toidx("<START>")
 	actn_v.toidx("<END>")
+	actn_v.toidx("@B")
+	for i in range(args.B_l):
+		actn_v.toidx("B"+str(i+1))
+	actn_v.toidx("@X")
 	for i in range(args.X_l):
 		actn_v.toidx("X"+str(i+1))
+	actn_v.toidx("@E")
 	for i in range(args.E_l):
 		actn_v.toidx("E"+str(i+1))
+	actn_v.toidx("@S")
 	for i in range(args.S_l):
 		actn_v.toidx("S"+str(i+1))
+	actn_v.toidx("@T")
 	for i in range(args.T_l):
 		actn_v.toidx("T"+str(i+1))
 	for i in range(args.P_l):
 		actn_v.toidx("P"+str(i+1))
 	for i in range(args.K_l):
 		actn_v.toidx("K"+str(i+1))
-	for i in range(args.P_l):
-		actn_v.toidx("P"+str(i+1)+"(")
-	for i in range(args.K_l):
-		actn_v.toidx("K"+str(i+1)+"(")
+	actn_v.toidx("@P(")
+	#for i in range(args.P_l):
+		#actn_v.toidx("P"+str(i+1)+"(")
+	actn_v.toidx("@K")
+	#for i in range(args.K_l):
+		#actn_v.toidx("K"+str(i+1)+"(")
 	actn_v.toidx("CARD_NUMBER")
 	actn_v.toidx("TIME_NUMBER")
 	actn_v.toidx(")")
@@ -70,7 +79,7 @@ def run_train(args):
 	#instances
 	train_input, train_sep = read_input(args.train_input)
 	#print train_input[0]
-	train_comb = [ get_same_lemma(x) for x in zip(train_input, train_sep)]
+	#train_comb = [ get_same_lemma(x) for x in zip(train_input, train_sep)]
 	#dev_input = read_input(args.dev_input)
 	#dev_comb = [ get_same_lemma(x[1]) for x in dev_input]
 
@@ -87,6 +96,7 @@ def run_train(args):
 	#print train_output[0]
 	#dev_output = read_output(args.dev_action)
 	train_action = tree2action(train_output, actn_v)
+	exit(1)
 	#dev_actoin, actn_v = output2action(dev_output, actn_v)
 	#print train_action[0][0]
 	#print train_action[0][1]
