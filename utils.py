@@ -1,4 +1,69 @@
 # -*- coding: utf-8 -*-
+
+import nltk
+from nltk.stem import WordNetLemmatizer
+from nltk.corpus import wordnet
+
+
+def get_wordnet_pos(treebank_tag):
+	if treebank_tag.startswith('J'):
+		return wordnet.ADJ
+	elif treebank_tag.startswith('V'):
+		return wordnet.VERB
+	elif treebank_tag.startswith('N'):
+		return wordnet.NOUN
+	elif treebank_tag.startswith('R'):
+		return wordnet.ADV
+	else:
+		return None
+def get_lemmas(tokens):
+	lemmatizer = WordNetLemmatizer()
+	pos_tokens = [nltk.pos_tag(tokens)]
+	lemmas = []
+	for pos in pos_tokens[0]:
+		word, pos_tag = pos
+		pos_tag = get_wordnet_pos(pos_tag)
+		if pos_tag == None:
+			lemmas.append(word.lower())
+		else:
+			lemmas.append(lemmatizer.lemmatize(word.lower().decode("utf8"), pos_tag))
+		lemmas[-1] = lemmas[-1].encode("utf8")
+	return lemmas
+def read_input_test(filename):
+	data = [[]]
+	seps = [[]]
+	for line in open(filename):
+		line = line.strip()
+		if line == "":
+			data.append([])
+			seps.append([])
+		else:
+			if line[0] == "#":
+				continue
+			data[-1].append(["<s>"] + line.split() + ["</s>"])
+			if len(seps[-1]) == 0:
+				for i, w in enumerate(data[-1][-1]):
+					if w in ["<s>", "</s>", "|||"]:
+						seps[-1].append(i)
+	if len(data[-1]) == 0:
+		data.pop()
+		seps.pop()
+	
+	#print data[0]
+	#resign lem
+	for i, t in enumerate(data):
+		w, l = t
+		words = " ".join(w[1:-1]).split("|||")
+		lem = ""
+		for word in words:
+			lem += " ".join(get_lemmas(word.split()))+" ||| "
+		lem = ["<s>"] + lem[:-5].split() + ["</s>"]
+		data[i][1] = lem
+	#print data[0]
+	#exit(1)
+	return data, seps
+
+
 def read_input(filename):
 	data = [[]]
 	seps = [[]]
@@ -18,6 +83,7 @@ def read_input(filename):
 	if len(data[-1]) == 0:
 		data.pop()
 		seps.pop()
+	
 	return data, seps
 
 def get_singleton_dict(train_input, word_v):
