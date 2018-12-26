@@ -3,10 +3,11 @@ class struct_constraints_state:
 		self.reset()
 	def reset(self):
 		self.stack = [0]
-		self.stack_ex = [[0 for i in range(2)]]
+		self.stack_ex = [[0 for i in range(3)]]
 
 		self.k = 0
 		self.p = 0
+		self.b = 0
 		self.drs_c = 0
 
 		self.bracket = 0
@@ -30,13 +31,16 @@ class struct_constraints:
 		self.DUP = actn_v.toidx("DUP(")
 		self.OR = actn_v.toidx("OR(")
 
-		self.pb_start = actn_v.toidx("P1(")
-		self.pb_end = actn_v.toidx("P"+str(args.P_l)+"(")
-		self.kb_start = actn_v.toidx("K1(")
-		self.kb_end = actn_v.toidx("K"+str(args.K_l)+"(")
+		self.pb = actn_v.toidx("@P(")
+		self.kb = actn_v.toidx("@K(")
+
+		self.b_0 = actn_v.toidx("B0")
+		self.b_s = actn_v.toidx("B1")
+		self.b_e = actn_v.toidx("B"+str(args.B_l))
 
 		self.k_relation_offset = 0
 		self.drs_offset = 1
+		self.pointer_offset = 2
 		
 	def isterminal(self, state):
 		return len(state.stack) == 1 and state.init == False
@@ -56,13 +60,16 @@ class struct_constraints:
 			return self._get_drs_mask(state)
 		elif state.stack[-1] in [self.NOT, self.NEC, self.POS]:
 			#not, nec, pos
-			return self._get_1_mask(state)
+			return self._get_1p_mask(state)
 		elif state.stack[-1] in [self.OR, self.IMP, self.DUP]:
 			#or, imp, duplex
-			return self._get_2_mask(state)
-		elif state.stack[-1] == self.kb_start or state.stack[-1] == self.pb_start:
-			#k p
+			return self._get_2p_mask(state)
+		elif state.stack[-1] == self.kb:
+			#k
 			return self._get_1_mask(state)
+		elif state.stack[-1] == self.pb:
+			#p
+			return self._get_1p_mask(state)
 		else:
 			pass
 			#assert False
@@ -109,7 +116,22 @@ class struct_constraints:
 			self._assign(re, self.DUP, self.DUP, 1)
 			self._assign(re, self.OR, self.OR, 1)
 		return re
-
+	def _get_1p_mask(self, state):
+		if state.stack_ex[-1][self.pointer_offset] == 0:
+			re = self._get_zero(self.size)
+			self._assign(re, self.b_0, self.b_0, 1)
+			self._assign(re, self.b_s, self.b_s + state.b, 1)
+			return re
+		else:
+			return self._get_1_mask(state)
+	def _get_2p_mask(self, state):
+		if state.stack_ex[-1][self.pointer_offset] == 0:
+                        re = self._get_zero(self.size)
+                        self._assign(re, self.b_0, self.b_0, 1)
+                        self._assign(re, self.b_s, self.b_s + state.b, 1)
+                        return re
+                else:
+                        return self._get_2_mask(state)
 	def _get_1_mask(self, state):
 		re = self._get_zero(self.size)
 		if state.stack_ex[-1][self.drs_offset] == 0:
@@ -153,24 +175,26 @@ class struct_constraints:
 			state.stack.append(ix)
 			if ix == self.DRS:
 				state.drs_c += 1
-			state.stack_ex.append([0 for i in range(2)])
-		elif ix >= self.kb_start and ix <= self.kb_end:
+			state.stack_ex.append([0 for i in range(3)])
+		elif ix == self.kb:
 			state.stack.append(self.kb_start)
-			state.stack_ex.append([0 for i in range(2)])
+			state.stack_ex.append([0 for i in range(3)])
 			state.k += 1
-		elif ix >= self.pb_start and ix <= self.pb_end:
+		elif ix == self.pb:
 			state.stack.append(self.pb_start)
-			state.stack_ex.append([0 for i in range(2)])
-			state.p+= 1
+			state.stack_ex.append([0 for i in range(3)])
+			state.p += 1
+		elif (ix >= self.b_s and ix <= self.b_e) or ix == self.b_0:
+			state.stack_ex[-1][self.pointer_offset] = 1
 		elif ix == self.sep:
 			state.stack_ex.pop()
 			if state.stack[-1] == self.DRS or state.stack[-1] == self.SDRS:
 				state.stack_ex[-1][self.drs_offset] += 1
 			elif state.stack[-1] in [self.NOT, self.NEC, self.POS, self.IMP, self.DUP, self.OR]:
 				pass
-			elif state.stack[-1] == self.kb_start:
+			elif state.stack[-1] == self.kb:
 				state.stack_ex[-1][self.k_relation_offset] += 1
-			elif state.stack[-1] == self.pb_start:
+			elif state.stack[-1] == self.pb:
 				pass
 			else:
 				pass
@@ -313,7 +337,7 @@ class variable_constraints_state:
 		self.sep_exist = False
 
 class variable_constraints:
-	def __init__(self, actn_v, args):
+	def __init__(self, actn_v, args, sense_s, sense_e):
 		self.actn_v = actn_v
 		self.size = actn_v.size()
 		self.args = args
@@ -330,10 +354,13 @@ class variable_constraints:
 		self.k_start = actn_v.toidx("K1")
 
 		self.equ = actn_v.toidx("Equ(")
-		self.CARD = actn_v.toidx("CARD_NUMBER")
-		self.TIME = actn_v.toidx("TIME_NUMBER")
-		self.CARD_b = actn_v.toidx("Card(")
-		self.TIME_b = actn_v.toidx("Timex(")
+		#self.CARD = actn_v.toidx("CARD_NUMBER")
+		#self.TIME = actn_v.toidx("TIME_NUMBER")
+		#self.CARD_b = actn_v.toidx("Card(")
+		#self.TIME_b = actn_v.toidx("Timex(")
+
+		self.sense_s = sense_s
+		self.sense_e = sense_e
 
 	def isterminal(self, state):
 		return state.sep_exist

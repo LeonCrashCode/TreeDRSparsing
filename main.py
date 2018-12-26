@@ -43,19 +43,20 @@ def run_train(args):
 
 	actn_v.toidx("<START>")
 	actn_v.toidx("<END>")
-	actn_v.toidx("@B")
+	#actn_v.toidx("@B")
+	actn_v.toidx("B0")
 	for i in range(args.B_l):
 		actn_v.toidx("B"+str(i+1))
-	actn_v.toidx("@X")
+	#actn_v.toidx("@X")
 	for i in range(args.X_l):
 		actn_v.toidx("X"+str(i+1))
-	actn_v.toidx("@E")
+	#actn_v.toidx("@E")
 	for i in range(args.E_l):
 		actn_v.toidx("E"+str(i+1))
-	actn_v.toidx("@S")
+	#actn_v.toidx("@S")
 	for i in range(args.S_l):
 		actn_v.toidx("S"+str(i+1))
-	actn_v.toidx("@T")
+	#actn_v.toidx("@T")
 	for i in range(args.T_l):
 		actn_v.toidx("T"+str(i+1))
 	for i in range(args.P_l):
@@ -65,7 +66,7 @@ def run_train(args):
 	actn_v.toidx("@P(")
 	#for i in range(args.P_l):
 		#actn_v.toidx("P"+str(i+1)+"(")
-	actn_v.toidx("@K")
+	actn_v.toidx("@K(")
 	#for i in range(args.K_l):
 		#actn_v.toidx("K"+str(i+1)+"(")
 	actn_v.toidx("CARD_NUMBER")
@@ -86,6 +87,7 @@ def run_train(args):
 	singleton_idx_dict, word_dict, word_v = get_singleton_dict(train_input, word_v)
 	extra_vl = [ vocabulary() for i in range(len(train_input[0])-1)]	
 	train_instance, word_v, char_v, extra_vl = input2instance(train_input, word_v, char_v, pretrain, extra_vl, word_dict, args, "train")
+	#print train_instance[0]
 	word_v.freeze()
 	char_v.freeze()
 	for i in range(len(extra_vl)):
@@ -96,11 +98,33 @@ def run_train(args):
 	#print train_output[0]
 	#dev_output = read_output(args.dev_action)
 	train_action = tree2action(train_output, actn_v)
-	exit(1)
 	#dev_actoin, actn_v = output2action(dev_output, actn_v)
-	#print train_action[0][0]
-	#print train_action[0][1]
-	#print train_action[0][2]
+	
+	"""
+	print train_action[0][0]
+	for item in train_action[0][0]:
+		if type(item) == types.StringType:
+			print item,
+		else:
+			print actn_v.totok(item),
+	print
+	print train_action[0][1]
+	for item1 in train_action[0][1]:
+		for item in item1:
+                	if type(item) == types.StringType:
+                        	print item,
+                	else:
+                        	print actn_v.totok(item),
+        	print
+	print train_action[0][2]
+	for item1 in train_action[0][2]:
+		for item in item1:
+                	if type(item) == types.StringType:
+                        	print item,
+                	else:
+                        	print actn_v.totok(item),
+        	print
+	"""
 	print "word vocabulary size:", word_v.size()
 	word_v.dump(args.model_path_base+"/word.list")
 	print "char vocabulary size:", char_v.size()
@@ -127,7 +151,7 @@ def run_train(args):
 	assert encoder, "please specify encoder type"
 	
 	#check dict to get index
-	#BOX DISCOURSE RELATION PREDICATE CONSTANT
+	#BOX DISCOURSE RELATION PREDICATE SENSE
 	starts = []
 	ends = []
 	lines = []
@@ -141,11 +165,10 @@ def run_train(args):
 			if line[0] == "#":
 				continue
 			lines.append(line)
-
 	#mask = Mask(args, actn_v, starts, ends)
 	cstn_step1 = struct_constraints(actn_v, args)
 	cstn_step2 = relation_constraints(actn_v, args, starts, ends)
-	cstn_step3 = variable_constraints(actn_v, args)
+	cstn_step3 = variable_constraints(actn_v, args, starts[-1], ends[-1]) #SENSE
 	decoder = dec(actn_v.size(), args, actn_v, [cstn_step1, cstn_step2, cstn_step3])
 
 	if args.gpu:
@@ -184,7 +207,7 @@ def run_train(args):
 
 		check_iter += 1
 		input_t = input_representation(train_instance[i], singleton_idx_dict=singleton_idx_dict, train=True)
-		word_rep_t, sent_rep_t, copy_rep_t, hidden_t = encoder(input_t, train_comb[i], train_sep[i], train=True)
+		word_rep_t, sent_rep_t, copy_rep_t, hidden_t = encoder(input_t, train_sep[i], train=True)
 		#step 1
 		hidden_step1 = (hidden_t[0].view(args.action_n_layer, 1, -1), hidden_t[1].view(args.action_n_layer, 1, -1))
 		loss_t1, loss_p_t1, hidden_rep_t, hidden_step1 = decoder(train_action[i][0], hidden_step1, word_rep_t, sent_rep_t, pointer=train_action[i][3], copy_rep_t=None, train=True, state=None, opt=1)
@@ -223,14 +246,17 @@ def run_train(args):
 			tok = flat_train_action[j]
 			#print tok
 			if (type(tok) == types.StringType and tok[-1] == "(") or actn_v.totok(tok)[-1] == "(":
-				train_action_step3.append([hidden_rep_t[j], train_action[i][2][idx]])
-				#train_pointer_step3 += train_action[i][5][idx]
+				if type(tok) != types.StringType and tok >= starts[1] and tok <= ends[1]:
+					# is discourse relation
+					train_action_step3.append([hidden_rep_t[j], train_action[i][2][idx], -1])
+				else:
+					train_action_step3.append([hidden_rep_t[j], train_action[i][2][idx], train_action[i][5][idx][0]])
+					#train_pointer_step3 += train_action[i][5][idx]
 				idx += 1
 		assert idx == len(train_action[i][2])
-		loss_t3, hidden_rep_t, hidden_step3 = decoder(train_action_step3, hidden_step3, word_rep_t, sent_rep_t, pointer=None, copy_rep_t=None, train=True, state=None, opt=3)
+		loss_t3, hidden_rep_t, hidden_step3 = decoder(train_action_step3, hidden_step3, word_rep_t, sent_rep_t, pointer=None, copy_rep_t=copy_rep_t, train=True, state=None, opt=3)
 		check_loss3 += loss_t3.data.tolist()
 		#check_loss3_p += loss_p_t3.data.tolist()
-
 		if check_iter % args.check_per_update == 0:
 			print('epoch %.3f : structure %.5f, relation %.5f, variable %.5f, str_p %.5f' % (check_iter*1.0/len(train_instance), check_loss1*1.0 / args.check_per_update, check_loss2*1.0 / args.check_per_update, check_loss3*1.0 / args.check_per_update, check_loss1_p*1.0 / args.check_per_update))
 			check_loss1 = 0

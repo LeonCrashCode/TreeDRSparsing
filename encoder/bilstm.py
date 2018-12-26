@@ -53,7 +53,7 @@ class encoder_srnn(nn.Module):
         self.lstm = nn.LSTM(args.input_dim, args.bilstm_hidden_dim, num_layers=args.bilstm_n_layer, bidirectional=True)
         self.sent_lstm = nn.LSTM(args.bilstm_hidden_dim, args.bilstm_hidden_dim, num_layers=args.bilstm_n_layer, bidirectional=True)
         self.word2sent = nn.Linear(args.bilstm_hidden_dim*2, args.bilstm_hidden_dim)
-    def forward(self, input_t, combs, seps, train=True):
+    def forward(self, input_t, seps, train=True):
         hidden_t = self.inithidden()
         if train:
             self.lstm.dropout = self.args.dropout_f
@@ -64,23 +64,11 @@ class encoder_srnn(nn.Module):
 
         output_t, hidden_t = self.lstm(input_t.unsqueeze(1), hidden_t)
 
-        assert len(seps) -1 == len(combs)
-
         copy_rep_s = []
         for i in range(len(seps)-1):
             s = seps[i]
             e = seps[i+1]
-            sent = output_t[s+1:e]
-            comb = combs[i]
-
-            copy_rep = []
-            for j in range(len(comb)):
-                copy_rep.append([])
-                for idx in comb[j]:
-                    copy_rep[-1].append(sent[idx])
-                copy_rep[-1] = (torch.sum(torch.cat(copy_rep[-1]),0)/(len(comb[j]))).unsqueeze(0)
-            copy_rep = torch.cat(copy_rep, 0)
-            copy_rep_s.append(copy_rep)
+	    copy_rep_s.append(output_t[s+1:e])
 
         sent_rep = []
         for i in range(len(seps)-1):

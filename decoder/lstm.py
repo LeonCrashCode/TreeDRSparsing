@@ -59,7 +59,7 @@ class decoder(nn.Module):
 		elif opt == 2:
 			return self.forward_2(inputs, hidden, word_rep_t, sent_rep_t, copy_rep_t, train, state)
 		elif opt == 3:
-			return self.forward_3(inputs, hidden, word_rep_t, sent_rep_t, train, state)
+			return self.forward_3(inputs, hidden, word_rep_t, sent_rep_t, copy_rep_t, train, state)
 		else:
 			assert False, "unrecognized option"
 	def forward_1(self, input, hidden, word_rep_t, sent_rep_t, pointer, train, state):
@@ -327,7 +327,7 @@ class decoder(nn.Module):
 
 				copy_scores_t = None
 				if p != -1:
-					copy_scores_t = torch.bmm(self.copy_head(output).transpose(0,1), copy_rep_t[p].transpose(0,1).unsqueeze(0)).view(output.size(0), -1)
+					copy_scores_t = torch.bmm(self.copy_head(output).transpose(0,1), copy_rep_t[p].transpose(0,1).transpose(1,2)).view(output.size(0), -1)
 			
 				w_attn_scores_t = torch.bmm(self.word_head(output).transpose(0,1), word_rep_t.transpose(1,2))[0]
 				w_attn_weights_t = F.softmax(w_attn_scores_t, 1)
@@ -374,7 +374,7 @@ class decoder(nn.Module):
 				hidden_rep.append(output)
 				copy_scores_t = None
 				if p != -1:
-					copy_scores_t = torch.bmm(self.copy_head(output).transpose(0,1), copy_rep_t[p].transpose(0,1).unsqueeze(0)).view(output.size(0), -1)
+					copy_scores_t = torch.bmm(self.copy_head(output).transpose(0,1), copy_rep_t[p].transpose(0,1).transpose(1,2)).view(output.size(0), -1)
 
 				#copy_scores_t = torch.bmm(torch.bmm(output.transpose(0,1), self.copy_matrix), encoder_rep_t.transpose(0,1).unsqueeze(0)).view(output.size(0), -1)
 				#print copy_scores_t
@@ -559,50 +559,70 @@ class decoder(nn.Module):
 					break
 			return tokens[::-1], hidden_rep[::-1], hidden, [state.rel_g, state.d_rel_g]
 
-	def forward_3(self, input, hidden, word_rep_t, sent_rep_t, train, state):
+	def forward_3(self, input, hidden, word_rep_t, sent_rep_t, copy_rep_t, train, state):
 		if train:
 			self.lstm.dropout = self.args.dropout_f
-			List = []
-			g_List = []
-			for rel, var in input:
+			outputs = []
+			loss_t = []
+			for rel, var, p in input:
+				List = []
 				List.append(self.rel2var(rel).view(1, 1, -1))
-				g_List += var
-				var_t = torch.LongTensor(var[:-1])
-				if self.args.gpu:
-					var_t = var_t.cuda()
-				List.append(self.embeds(var_t).unsqueeze(1))
-
-			#print [x.size() for x in List]
-			action_t = torch.cat(List, 0)
-			#print action_t.size()
-			action_t = self.dropout(action_t)
-
-			output, hidden = self.lstm(action_t, hidden)
-
-			#word-level attention
-			w_attn_scores_t = torch.bmm(self.word_head(output).transpose(0,1), word_rep_t.transpose(1,2))[0]
-			w_attn_weights_t = F.softmax(w_attn_scores_t, 1)
-			w_attn_hiddens_t = torch.bmm(w_attn_weights_t.unsqueeze(0), word_rep_t)[0]
-
-			#sent-level attention
-			s_attn_scores_t = torch.bmm(self.sent_head(output).transpose(0,1), sent_rep_t.transpose(1,2))[0]
-			s_attn_weights_t = F.softmax(s_attn_scores_t, 1)
-			s_attn_hiddens_t = torch.bmm(s_attn_weights_t.unsqueeze(0), sent_rep_t)[0]
+				for v in var[:-1]:
+					if type(v) == types.StringType:
+						assert p != -1
+						List.append(self.copy(copy_rep_t[p][int(v[1:])].view(1, 1, -1)))
+					else:
+						v_t = torch.LongTensor([v])
+                                                if self.args.gpu:
+                                                        v_t = v_t.cuda()
+                                                List.append(self.embeds(v_t).unsqueeze(0))
 
 
-			feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((w_attn_hiddens_t, s_attn_hiddens_t, action_t.view(output.size(0),-1)), 1)))
-			global_scores_t = self.out(feat_hiddens_t)
+				action_t = torch.cat(List, 0)
+				action_t = self.dropout(action_t)
+
+				output, hidden = self.lstm(action_t, hidden)
+				outputs.append(output)
+				copy_scores_t = None
+                                if p != -1:
+                                        copy_scores_t = torch.bmm(self.copy_head(output).transpose(0,1), copy_rep_t[p].transpose(0,1).transpose(1,2)).view(output.size(0), -1)
+
+				#word-level attention
+				w_attn_scores_t = torch.bmm(self.word_head(output).transpose(0,1), word_rep_t.transpose(1,2))[0]
+				w_attn_weights_t = F.softmax(w_attn_scores_t, 1)
+				w_attn_hiddens_t = torch.bmm(w_attn_weights_t.unsqueeze(0), word_rep_t)[0]
+
+				
+				#sent-level attention
+				s_attn_scores_t = torch.bmm(self.sent_head(output).transpose(0,1), sent_rep_t.transpose(1,2))[0]
+				s_attn_weights_t = F.softmax(s_attn_scores_t, 1)
+				s_attn_hiddens_t = torch.bmm(s_attn_weights_t.unsqueeze(0), sent_rep_t)[0]
 
 
-			log_softmax_output_t = F.log_softmax(global_scores_t, 1)
+				feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((w_attn_hiddens_t, s_attn_hiddens_t, action_t.view(output.size(0),-1)), 1)))
+				global_scores_t = self.out(feat_hiddens_t)
 
-			action_g_t = torch.LongTensor(g_List)
-			if self.args.gpu:
-				action_g_t = action_g_t.cuda()
-			loss_t = self.criterion(log_softmax_output_t, action_g_t)
+				total_score = global_scores_t
+				if p != -1:
+                                        total_score = torch.cat((total_score, copy_scores_t), 1)
 
+				log_softmax_output_t = F.log_softmax(total_score, 1)
+				
+				g_List = []
+                                for i in range(len(var)):
+                                        if type(var[i]) == types.StringType:
+                                                g_List.append(int(var[i][1:]) + self.action_size)
+                                        else:
+                                                g_List.append(var[i])
 
-			return loss_t, output, hidden
+                                action_g_t = torch.LongTensor(g_List)
+                                if self.args.gpu:
+                                        action_g_t = action_g_t.cuda()
+                                loss_t.append(self.criterion(log_softmax_output_t, action_g_t).view(1,-1))
+	
+                        loss_t = torch.sum(torch.cat(loss_t,0)) / len(loss_t)
+
+			return loss_t, torch.cat(outputs,0), hidden
 
 		elif self.args.beam_size == 1:
 			self.lstm.dropout = 0.0

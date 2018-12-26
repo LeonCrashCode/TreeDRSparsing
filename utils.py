@@ -176,7 +176,7 @@ def is_struct(tok):
 		return True
 	if re.match("^DRS-[0-9]+\($", tok):
 		return True
-	if re.match("^[PK][0-9]+\($", tok):
+	if tok in ["@P(", "@K("]:
 		return True
 	return False
 
@@ -204,7 +204,7 @@ def get_struct_rel_var(tree, actn_v):
 					struct.append(actn_v.toidx(parent))
 				struct_pointer.append(current_pointer[0])
 
-				if (parent in ["NOT(", "POS(", "NEC(", "IMP(", "OR(", "DUP("]) or re.match("^P[0-9]+\($", parent):
+				if (parent in ["NOT(", "POS(", "NEC(", "IMP(", "OR(", "DUP("]) or parent == "@P(":
 					p = child[0]
 					child = child[1:]
 					struct.append(actn_v.toidx(p))
@@ -223,7 +223,7 @@ def get_struct_rel_var(tree, actn_v):
 
 							variable.append([])
 							for cc in c[1:]:
-								if re.match("^\$[0-9]+\($",cc):
+								if re.match("^\$[0-9]+$",cc):
 									variable[-1].append(cc)
 								else:
 									variable[-1].append(actn_v.toidx(cc))

@@ -17,7 +17,7 @@ class sentence_rep(nn.Module):
 			self.pretrain_embeds = nn.Embedding(pretrain.size(), args.pretrain_dim)
 			self.pretrain_embeds.weight = nn.Parameter(torch.FloatTensor(pretrain.vectors()), False)
 			info_dim += args.pretrain_dim
-		if args.extra_dim_list:
+		if len(extra_vl_size) > 0:
 			dims = args.extra_dim_list.split(",")
 			"""
 			self.extra_embeds = []
@@ -93,7 +93,8 @@ class sentence_rep(nn.Module):
 			pretrain_t = self.pretrain_embeds(pretrain_t)
 			word_t = torch.cat((word_t, pretrain_t), 1)
 		#print word_t, word_t.size()
-		if self.args.extra_dim_list:
+		if False:
+		#if self.args.extra_dim_list:
 			"""
 			for i, extra_embeds in enumerate(self.extra_embeds):
 				extra_t = torch.LongTensor(instance[4+i])
