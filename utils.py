@@ -327,30 +327,41 @@ def get_k_scope(output, actn_v):
 	stack = []
 	k_scope = {}
 	sdrs_idx = 0
+	k = 0
 	for act in output:
 		act_s = actn_v.totok(act)
 		if act_s[-1] == "(":
 			if act_s == "SDRS(":
 				stack.append([sdrs_idx,[]])
 				sdrs_idx += 1
-			elif re.match("^K[0-9]+\($", act_s):
-				stack.append([1000+int(act_s[1:-1])-1, []])
+			elif act_s == "@K(":
+				stack.append([1000+k, []])
+				k += 1
+			#elif re.match("^K[0-9]+\($", act_s):
+			#	stack.append([1000+int(act_s[1:-1])-1, []])
 			else:
 				stack.append([-1,[]])
 		elif actn_v.totok(act) == ")":
 			b = stack.pop()
 			if b[0] != -1 and b[0] < 1000:
 				k_scope[b[0]] = b[1]
-			if len(stack) > 0:
-				stack[-1][1] = stack[-1][1] + b[1]
+			#if len(stack) > 0:
+			#	stack[-1][1] = stack[-1][1] + b[1]
 			if b[0] >= 1000:
 				stack[-1][1].append(b[0]%1000)
+
 	return k_scope
 
 def get_p_max(output, actn_v):
 	p_max = -1
-	for act in output:
-		if re.match("^P[0-9]+\($", actn_v.totok(act)):
-			p_max = max(p_max, int(actn_v.totok(act)[1:-1])-1)
-
+	for item in output:
+		if actn_v.totok(item) == "@P(":
+			p_max += 1
 	return p_max
+def get_b_max(output, actn_v):
+	b_max = 0
+	for item in output:
+		item = actn_v.totok(item)
+		if re.match("^B[0-9]+$", item) and item != "B0":
+			b_max = max(b_max, int(item[1:]))
+	return b_max

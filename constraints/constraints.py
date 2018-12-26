@@ -86,7 +86,7 @@ class struct_constraints:
 		if state.stack_ex[-1][self.k_relation_offset] < 2:
 			#only k
 			re = self._get_zero(self.size)
-			self._assign(re, self.kb_start + state.k, self.kb_start + state.k, 1)
+			self._assign(re, self.kb, self.kb, 1)
 			return re
 		else:
 			#only reduce
@@ -99,7 +99,7 @@ class struct_constraints:
 					if state.stack[i] == self.SDRS:
 						cnt += max(0, 1 - state.stack_ex[i][self.k_relation_offset])
 				if state.k < self.args.K_l - cnt:
-					self._assign(re, self.kb_start + state.k, self.kb_start + state.k, 1)
+					self._assign(re, self.kb, self.kb, 1)
 			return re
 	def _get_drs_mask(self, state):
 		re = self._get_zero(self.size)
@@ -107,7 +107,7 @@ class struct_constraints:
 
 		if self.args.drs_l - state.drs_c >= 1:
 			if state.p < self.args.P_l:
-				self._assign(re, self.pb_start + state.p, self.pb_start + state.p, 1)
+				self._assign(re, self.pb, self.pb, 1)
 			self._assign(re, self.NOT, self.NOT, 1)
 			self._assign(re, self.NEC, self.NEC, 1)
 			self._assign(re, self.POS, self.POS, 1)
@@ -177,15 +177,17 @@ class struct_constraints:
 				state.drs_c += 1
 			state.stack_ex.append([0 for i in range(3)])
 		elif ix == self.kb:
-			state.stack.append(self.kb_start)
+			state.stack.append(self.kb)
 			state.stack_ex.append([0 for i in range(3)])
 			state.k += 1
 		elif ix == self.pb:
-			state.stack.append(self.pb_start)
+			state.stack.append(self.pb)
 			state.stack_ex.append([0 for i in range(3)])
 			state.p += 1
 		elif (ix >= self.b_s and ix <= self.b_e) or ix == self.b_0:
 			state.stack_ex[-1][self.pointer_offset] = 1
+			if ix == self.b_s + state.b:
+				state.b += 1
 		elif ix == self.sep:
 			state.stack_ex.pop()
 			if state.stack[-1] == self.DRS or state.stack[-1] == self.SDRS:
@@ -320,12 +322,14 @@ class relation_constraints:
 class variable_constraints_state:
 	def __init__(self):
 		pass
-	def reset(self, p_max):
+	def reset(self, p_max, b_max, length):
 		self.p_max = p_max
 		self.x = 0
 		self.e = 0
 		self.s = 0
 		self.t = 0
+		self.b = b_max
+		self.copy_length = length
 	def reset_condition(self, cond, k_scope=None):
 		self.cond = cond
 		self.k_scope = k_scope
@@ -333,8 +337,18 @@ class variable_constraints_state:
 	def reset_relation(self, rel):
 		self.rel = rel
 		self.prev_v = -1
-		self.prev_prev_v = -1
 		self.sep_exist = False
+
+		# 0: (empty)
+		# 1: B0
+		# 2: B0 var1
+		# 3: B0 var1 var2
+		# 4: B0 var1 $1
+		# 5: B0 var1 sense
+		if self.k_scope == None:
+			self.format = 0
+		else:
+			self.format = 6
 
 class variable_constraints:
 	def __init__(self, actn_v, args, sense_s, sense_e):
@@ -346,12 +360,15 @@ class variable_constraints:
 		self.SDRS = actn_v.toidx("SDRS(")
 		self.sep = actn_v.toidx(")")
 
-		self.x_start = actn_v.toidx("X1")
-		self.e_start = actn_v.toidx("E1")
-		self.s_start = actn_v.toidx("S1")
-		self.t_start = actn_v.toidx("T1")
-		self.p_start = actn_v.toidx("P1")
-		self.k_start = actn_v.toidx("K1")
+		self.x_s = actn_v.toidx("X1")
+		self.e_s = actn_v.toidx("E1")
+		self.s_s = actn_v.toidx("S1")
+		self.t_s = actn_v.toidx("T1")
+		self.p_s = actn_v.toidx("P1")
+		self.k_s = actn_v.toidx("K1")
+		self.b_s = actn_v.toidx("B1")
+
+		self.b_0 = actn_v.toidx("B0")
 
 		self.equ = actn_v.toidx("Equ(")
 		#self.CARD = actn_v.toidx("CARD_NUMBER")
@@ -366,8 +383,8 @@ class variable_constraints:
 		return state.sep_exist
 
 	def get_step_mask(self, state):
-		if self.args.soft_const:
-			return self.get_mask(state)
+		#if self.args.soft_const:
+		#	return self.get_mask(state)
 
 		if state.cond == self.DRS:
 			return self.get_drs_mask(state)
@@ -378,10 +395,11 @@ class variable_constraints:
 			#assert False
 
 	def _assign_all_v(self, re, state):
-		self._assign(re, self.x_start, self.x_start + state.x, 1)
-		self._assign(re, self.e_start, self.e_start + state.e, 1)
-		self._assign(re, self.s_start, self.s_start + state.s, 1)
-		self._assign(re, self.t_start, self.t_start + state.t, 1)
+		self._assign(re, self.x_s, self.x_s + state.x, 1)
+		self._assign(re, self.e_s, self.e_s + state.e, 1)
+		self._assign(re, self.s_s, self.s_s + state.s, 1)
+		self._assign(re, self.t_s, self.t_s + state.t, 1)
+	"""
 	def get_mask(self,state):
 		re = self._get_zero(self.size)
 		if state.prev_v == -1:
@@ -406,61 +424,78 @@ class variable_constraints:
 		else:
 			self._assign(re, self.sep, self.sep, 1)
 		return re
+	"""
 	def get_drs_mask(self, state):
-		if state.prev_v == -1:
-			re = self._get_zero(self.size)
+		re = self._get_zero(self.size + state.copy_length)
+		if state.format == 0:
+			self._assign(re, self.b_0, self.b_0, 1)
+			self._assign(re, self.b_s, self.b_s + state.b, 1)
+		elif state.format == 1:
 			self._assign_all_v(re, state)
 			if state.p_max >= 0:
-				self._assign(re, self.p_start, self.p_start + state.p_max, 1)
-			return re
-		elif state.prev_prev_v == -1:
-			re = self._get_zero(self.size)
-			if state.rel == self.CARD_b:
-				self._assign(re, self.CARD, self.CARD, 1)
-			elif state.rel == self.TIME_b:
-				self._assign(re, self.TIME, self.TIME, 1)
-			else:
-				self._assign_all_v(re,state)
-				if state.p_max >= 0:
-					self._assign(re, self.p_start, self.p_start + state.p_max, 1)
-				self._assign(re, self.sep, self.sep, 1)
-
+				self._assign(re, self.p_s, self.p_s + state.p_max, 1)
+		elif state.format == 2:
+			self._assign_all_v(re, state)
+			if state.p_max >= 0:
+				self._assign(re, self.p_s, self.p_s + state.p_max, 1)
+			self._assign(re, self.size, self.size+state.copy_length-1, 1)
+			self._assign(re, self.sense_s, self.sense_e, 1)
 			if state.rel != self.equ:
 				self._assign(re, state.prev_v, state.prev_v, 0)
-			return re
-		else:
-			re = self._get_zero(self.size)
+		elif state.format == 3 or state.format == 5:
 			self._assign(re, self.sep, self.sep, 1)
-			return re
+		elif state.format == 4:
+			self._assign(re, self.size, self.size+state.copy_length-1, 1)
+			self._assign(re, self.sep, self.sep, 1)
+		else:
+			assert False, "unrecognized format"
+		return re
 	def get_sdrs_mask(self, state):
-		if state.prev_v == -1:
-			re = self._get_zero(self.size)
+		re = self._get_zero(self.size + state.copy_length)
+		if state.format == 6:
 			for k in state.k_scope:
-				self._assign(re, self.k_start + k, self.k_start + k, 1)
-			return re
-		elif state.prev_prev_v == -1:
-			re = self._get_zero(self.size)
+				self._assign(re, self.k_s + k, self.k_s + k, 1)
+		elif state.format == 7:
 			for k in state.k_scope:
-				self._assign(re, self.k_start + k, self.k_start + k, 1)
+				self._assign(re, self.k_s + k, self.k_s + k, 1)
 			self._assign(re, state.prev_v, state.prev_v, 0)
-			return re
-		else:
-			re = self._get_zero(self.size)
+		elif state.format == 8:
 			self._assign(re, self.sep, self.sep, 1)
-			return re
+		else:
+			assert False, "unrecognized format"
+		return re
 	def update(self, ix, state):
 		if ix == self.sep:
 			state.sep_exist = True
-		elif ix == self.x_start + state.x and state.x + 1 < self.args.X_l:
+		elif ix == self.x_s + state.x and state.x + 1 < self.args.X_l:
 			state.x += 1
-		elif ix == self.e_start + state.e and state.e + 1 < self.args.E_l:
+		elif ix == self.e_s + state.e and state.e + 1 < self.args.E_l:
 			state.e += 1
-		elif ix == self.s_start + state.s and state.s + 1 < self.args.S_l:
+		elif ix == self.s_s + state.s and state.s + 1 < self.args.S_l:
 			state.s += 1
-		elif ix == self.t_start + state.t and state.t + 1 < self.args.T_l:
+		elif ix == self.t_s + state.t and state.t + 1 < self.args.T_l:
 			state.t += 1
-		state.prev_prev_v = state.prev_v
+		elif ix == self.b_s + state.b and state.b + 1 < self.args.B_l:
+			state.b += 1
 		state.prev_v = ix
+
+		if state.format <= 1:
+			state.format += 1
+		elif state.format == 2:
+			if ix >= self.sense_s and ix <= self.sense_e:
+				state.format = 5
+			elif ix < self.size:
+				state.format = 3
+			else:
+				state.format = 4
+		elif state.format in [3, 4, 5]:
+			pass
+		elif state.format <= 7:
+			state.format += 1
+		elif state.format == 8:
+			pass
+		else:
+			assert False, "unrecognized format"
 
 	def _print_state(self, state):
 		print "cond", self.actn_v.totok(state.cond)
@@ -470,8 +505,9 @@ class variable_constraints:
 			print "rel", self.actn_v.totok(state.rel)
 		print "p_max", state.p_max
 		print "k_scope", state.k_scope
-		print "xest", state.x, state.e, state.s, state.t
-		print "prev_prev_v prev_v", state.prev_prev_v, state.prev_v
+		print "xestb", state.x, state.e, state.s, state.t, state.b
+		print "prev_v",  state.prev_v
+		print "format", state.format
 	def _get_one(self, size):
 		return [1 for i in range(size)]
 	def _get_zero(self, size):

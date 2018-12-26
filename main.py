@@ -16,6 +16,7 @@ from decoder.lstm import decoder as dec
 
 from utils import get_k_scope
 from utils import get_p_max
+from utils import get_b_max
 from constraints.constraints import struct_constraints
 from constraints.constraints import struct_constraints_state
 from constraints.constraints import relation_constraints
@@ -511,44 +512,50 @@ def run_check(args):
 
 	import re
 	actn_v = vocabulary(UNK=False)
-
 	actn_v.toidx("<START>")
 	actn_v.toidx("<END>")
+	#actn_v.toidx("@B")
+	actn_v.toidx("B0")
+	for i in range(args.B_l):
+		actn_v.toidx("B"+str(i+1))
+	#actn_v.toidx("@X")
 	for i in range(args.X_l):
 		actn_v.toidx("X"+str(i+1))
+	#actn_v.toidx("@E")
 	for i in range(args.E_l):
 		actn_v.toidx("E"+str(i+1))
+	#actn_v.toidx("@S")
 	for i in range(args.S_l):
 		actn_v.toidx("S"+str(i+1))
+	#actn_v.toidx("@T")
 	for i in range(args.T_l):
 		actn_v.toidx("T"+str(i+1))
 	for i in range(args.P_l):
 		actn_v.toidx("P"+str(i+1))
 	for i in range(args.K_l):
 		actn_v.toidx("K"+str(i+1))
-	for i in range(args.P_l):
-		actn_v.toidx("P"+str(i+1)+"(")
-	for i in range(args.K_l):
-		actn_v.toidx("K"+str(i+1)+"(")
+	actn_v.toidx("@P(")
+	#for i in range(args.P_l):
+		#actn_v.toidx("P"+str(i+1)+"(")
+	actn_v.toidx("@K(")
+	#for i in range(args.K_l):
+		#actn_v.toidx("K"+str(i+1)+"(")
 	actn_v.toidx("CARD_NUMBER")
 	actn_v.toidx("TIME_NUMBER")
 	actn_v.toidx(")")
 
-	print actn_v.size()
 	actn_v.read_file(args.action_dict_path)
-	print actn_v.size()
 	actn_v.freeze()
-
-	train_input = read_input(args.train_input)
+	
+	train_input, train_sep = read_input(args.train_input)
 	train_output = read_tree(args.train_action)
-	#print train_output[0]
-	#dev_output = read_output(args.dev_action)
-	train_action = tree2action(train_output, actn_v, [cstn_step1, cstn_step2, cstn_step3])
+	train_action = tree2action(train_output, actn_v)
+
 	#dev_actoin, actn_v = output2action(dev_output, actn_v)
 	print "action vocaluary size:", actn_v.size()
 
 	#check dict to get index
-	#BOX DISCOURSE RELATION PREDICATE CONSTANT
+	#BOX DISCOURSE RELATION PREDICATE SENSE
 	starts = []
 	ends = []
 	lines = []
@@ -563,110 +570,94 @@ def run_check(args):
 				continue
 			lines.append(line)
 
-	cstns1 = cstn_step1(actn_v, args)
-	cstns2 = cstn_step2(actn_v, args, starts, ends)
-	cstns3 = cstn_step3(actn_v, args)
+	cstn_step1 = struct_constraints(actn_v, args)
+	cstn_step2 = relation_constraints(actn_v, args, starts, ends)
+	cstn_step3 = variable_constraints(actn_v, args, starts[-1], ends[-1]) #SENSE
 
+	state_step1 = struct_constraints_state()
+	state_step2 = relation_constraints_state()
+	state_step3 = variable_constraints_state()
 	line = 0
 	for i in range(len(train_action)):
-		action_step1 = train_action[i][0]
+		print i+1
+		input_length = len(train_input[i][0])
+		action_step1 = train_action[i][0][1:]
 		action_step2 = train_action[i][1]
 		action_step3 = train_action[i][2]
-		#print [[actn_v.totok(x) for x in action] for action in action_step3]
-		cstns2.reset_length(len(train_input[i][0])-2)
+		state_step1.reset()
 
-		#print action_step2
-		line += 1
-		print line
-		cstns1.reset()
-		#processed_act = []
-		idx = 0
-		idx2 = 0
+		for act in action_step1:
+			#print actn_v.totok(act)
+			m = cstn_step1.get_step_mask(state_step1)
+			assert m[act] == 1
+			cstn_step1.update(act, state_step1)
 
-		# k_scope
-		stack = []
-		k_scope = {}
-		sdrs_idx = 0
-		for act in action_step1[1:]:
-			#print stack
-			act_s = actn_v.totok(act)
-			if act_s[-1] == "(":
-				if act_s == "SDRS(":
-					stack.append([sdrs_idx,[]])
-					sdrs_idx += 1
-				elif re.match("^K[0-9]+\($", act_s):
-					stack.append([1000+int(act_s[1:-1])-1, []])
-				else:
-					stack.append([-1,[]])
-			elif actn_v.totok(act) == ")":
-				b = stack.pop()
-				if b[0] != -1 and b[0] < 1000:
-					k_scope[b[0]] = b[1]
-				if len(stack) > 0:
-					stack[-1][1] = stack[-1][1] + b[1]
-				if b[0] >= 100:
-					stack[-1][1].append(b[0]%1000)
-		sdrs_idx = 0
-		# print k_scope
-		# p_max
-		p_max = -1
-		for act in action_step1[1:]:
-			if re.match("^P[0-9]+\($", actn_v.totok(act)):
-				p_max = max(p_max, int(actn_v.totok(act)[1:-1])-1)
 
-		cstns3.reset(p_max)
-		for act in action_step1[1:]:
-			cstn = cstns1.get_step_mask()
-			#cstns._print_state()
-			
-			#print [actn_v.totok(x) for x in action[0][1:]]
-			#print processed_act
-			#print "required", act, actn_v.totok(act)
-			#print "visible",
-			#for i in range(len(cstn)):
-			#	if cstn[i] == 1:
-			#		print i,
-			#print 
-			#processed_act.append(actn_v.totok(act))
-			assert cstn[act] == 1
-			cstns1.update(act)
-			if act in [actn_v.toidx("DRS("), actn_v.toidx("SDRS(")]:
-				cstns2.reset_condition(act)
-				if act == actn_v.toidx("SDRS("):
-					cstns3.reset_condition(act, k_scope[sdrs_idx])
-					sdrs_idx += 1
-				else:
-					cstns3.reset_condition(act)
-				#print act
-				for a in action_step2[idx]:
-					cstn = cstns2.get_step_mask()
-					#cstns2._print_state()
-
-					if type(a) == types.StringType:
-						#print a
-						assert cstn[int(a[1:-1])+actn_v.size()] == 1
+		state_step2.reset()
+		drs_idx = 0
+		for k in range(len(action_step1)):
+			act_drs = action_step1[k]
+			act_next = None
+			if k + 1 < len(action_step1):
+				act_next = action_step1[k+1]
+			if actn_v.totok(act_drs) == "DRS(":
+				state_step2.reset_length(input_length)
+				state_step2.reset_condition(act_drs, act_next)
+				for act in action_step2[drs_idx]:
+					if type(act) == types.StringType:
+						#print act
+						act = int(act[1:-1]) + actn_v.size()
 					else:
-						#print actn_v.totok(a)
-						assert cstn[a] == 1
-					cstns2.update(a)
+						#print actn_v.totok(act)
+						pass
+					m = cstn_step2.get_step_mask(state_step2)
+					assert m[act] == 1
+					cstn_step2.update(act, state_step2)
+				drs_idx += 1
 
-					if type(a) == types.StringType or a != actn_v.toidx(")"):
-						if type(a) == types.StringType:
-							a = int(a[1:-1])+actn_v.size()
-						cstns3.reset_relation(a)
-						for v in action_step3[idx2]:
-							cstn = cstns3.get_step_mask()
-							#cstns3._print_state()
-							#print "required", v, actn_v.totok(v)
-							#print "visible",
-							#for i in range(len(cstn)):
-							#	if cstn[i] == 1:
-							#		print i,
-							#print
-							assert cstn[v] == 1
-							cstns3.update(v)
-						idx2 += 1
-				idx += 1
+			elif actn_v.totok(act_drs) == "SDRS(":
+				state_step2.reset_length(0)
+				state_step2.reset_condition(act_drs, act_next)
+				for act in action_step2[drs_idx]:
+					assert type(act) != types.StringType
+					#print actn_v.totok(act)
+					m = cstn_step2.get_step_mask(state_step2)
+					assert m[act] == 1
+					cstn_step2.update(act, state_step2)
+				drs_idx += 1
+
+		k_scope = get_k_scope(action_step1, actn_v)
+		p_max = get_p_max(action_step1, actn_v)
+		b_max = get_b_max(action_step1, actn_v)
+
+		state_step3.reset(p_max, b_max, input_length)
+		k = 0
+		kk = 0
+		sdrs_idx = 0
+		for act_drs in action_step1:
+			if actn_v.totok(act_drs) in ["DRS(", "SDRS("]:
+				if actn_v.totok(act_drs) == "SDRS(":
+					state_step3.reset_condition(act_drs, k_scope[sdrs_idx])
+					sdrs_idx += 1
+				else:
+					state_step3.reset_condition(act_drs)
+				for act_rel in action_step2[k][:-1]: # rel( rel( )
+					if type(act_rel) == types.StringType:
+						act_rel = int(act_rel[1:-1]) + actn_v.size()
+					state_step3.reset_relation(act_rel)
+					for act in action_step3[kk]:
+						if type(act) == types.StringType:
+							#print act
+							act = int(act[1:]) + actn_v.size()
+						else:
+							#print actn_v.totok(act)
+							pass
+						#cstn_step3._print_state(state_step3)
+						m = cstn_step3.get_step_mask(state_step3)
+						assert m[act] == 1
+						cstn_step3.update(act, state_step3)
+					kk += 1
+				k += 1
 
 def assign_hypers(subparser, hypers):
 	for key in hypers.keys():
