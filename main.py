@@ -360,6 +360,7 @@ def test(args, output_file, test_instance, test_sep, actn_v, input_representatio
 					if actn_v.totok(act1) == "SDRS(":
 						state_step3.reset_condition(act1, k_scope[sdrs_idx])
 						state_step3.reset_length(0)
+						p = -1
 						sdrs_idx += 1
 					else:
 						state_step3.reset_condition(act1)
