@@ -74,9 +74,7 @@ def run_train(args):
 	actn_v.toidx("TIME_NUMBER")
 	actn_v.toidx(")")
 
-	#print actn_v.size()
 	actn_v.read_file(args.action_dict_path)
-	#print actn_v.size()
 	actn_v.freeze()
 	#instances
 	train_input, train_sep = read_input(args.train_input)
@@ -284,10 +282,10 @@ def run_train(args):
 		if check_iter % args.eval_per_update == 0:
 			torch.save({"encoder":encoder.state_dict(), "decoder":decoder.state_dict(), "input_representation": input_representation.state_dict()}, args.model_path_base+"/model"+str(int(check_iter/args.eval_per_update)))
 			#test(args, args.dev_output, dev_instance, dev_comb, actn_v, input_representation, encoder, decoder)
-		
+			exit(1)
 
 
-def test(args, output_file, test_instance, test_sep, test_comb, actn_v, input_representation, encoder, decoder):
+def test(args, output_file, test_instance, test_sep, actn_v, input_representation, encoder, decoder):
 	
 	state_step1 = struct_constraints_state()
 	state_step2 = relation_constraints_state()
@@ -296,7 +294,7 @@ def test(args, output_file, test_instance, test_sep, test_comb, actn_v, input_re
 		for j, instance in enumerate(test_instance):
 			print j
 			test_input_t = input_representation(instance, singleton_idx_dict=None, train=False)
-			test_word_rep_t, test_sent_rep_t, test_copy_rep_t, test_hidden_t= encoder(test_input_t, test_comb[j], test_sep[j], train=False)
+			test_word_rep_t, test_sent_rep_t, test_copy_rep_t, test_hidden_t= encoder(test_input_t, test_sep[j], train=False)
 
 			#step 1
 			test_hidden_step1 = (test_hidden_t[0].view(args.action_n_layer, 1, -1), test_hidden_t[1].view(args.action_n_layer, 1, -1))
@@ -348,19 +346,28 @@ def test(args, output_file, test_instance, test_sep, test_comb, actn_v, input_re
 			#step 3
 			k_scope = get_k_scope(test_output_step1, actn_v)
 			p_max = get_p_max(test_output_step1, actn_v)
-			
+			b_max = get_b_max(test_output_step1, actn_v)
+
 			test_output_step3 = []
 			test_hidden_step3 = (test_hidden_t[0].view(args.action_n_layer, 1, -1), test_hidden_t[1].view(args.action_n_layer, 1, -1))
-			state_step3.reset(p_max)
+			state_step3.reset(p_max, b_max)
 			k = 0
 			sdrs_idx = 0
+			drs_idx = 0
+			p = -1
 			for act1 in test_output_step1:
 				if actn_v.totok(act1) in ["DRS(", "SDRS("]:
 					if actn_v.totok(act1) == "SDRS(":
 						state_step3.reset_condition(act1, k_scope[sdrs_idx])
+						state_step3.reset_length(0)
 						sdrs_idx += 1
 					else:
 						state_step3.reset_condition(act1)
+						if actn_v.totok(act1) == "DRS(":
+							p = test_pointers_step1[drs_idx]
+							state_step3.reset_length(test_copy_rep_t[test_pointers_step1[drs_idx]].size(0))
+							drs_idx += 1
+
 					for kk in range(len(test_output_step2[k])-1): # rel( rel( )
 						act2 = test_output_step2[k][kk]
 						#if act2 >= actn_v.size():
@@ -372,10 +379,10 @@ def test(args, output_file, test_instance, test_sep, test_comb, actn_v, input_re
 						#print test_hidden_rep_step2[k][kk]
 						#print test_hidden_step3
 						#print "========================="
-						one_test_output_step3, _, test_hidden_step3, partial_state = decoder(test_hidden_rep_step2[k][kk], test_hidden_step3, test_word_rep_t, test_sent_rep_t, pointer=None, copy_rep_t=None, train=False, state=state_step3, opt=3)
+						one_test_output_step3, _, test_hidden_step3, partial_state = decoder([test_hidden_rep_step2[k][kk], p], test_hidden_step3, test_word_rep_t, test_sent_rep_t, pointer=None, copy_rep_t=test_copy_rep_t, train=False, state=state_step3, opt=3)
 						test_output_step3.append(one_test_output_step3)
 						#partial state is to store how many variable it already has
-						state_step3.x, state_step3.e, state_step3.s, state_step3.t = partial_state
+						state_step3.x, state_step3.e, state_step3.s, state_step3.t, state_step3.b = partial_state
 						#exit(1)
 					k += 1
 			#print test_output_step3
@@ -398,7 +405,10 @@ def test(args, output_file, test_instance, test_sep, test_comb, actn_v, input_re
 						else:
 							test_output.append(actn_v.totok(act2))
 						for act3 in test_output_step3[kk]:
-							test_output.append(actn_v.totok(act3))
+							if act3 >= actn_v.size():
+								test_output.append("$"+str(act3-actn_v.size()))
+							else:
+								test_output.append(actn_v.totok(act3))
 						kk += 1
 					k += 1
 			w.write(" ".join(test_output) + "\n")
@@ -424,22 +434,32 @@ def run_test(args):
 
 	actn_v.toidx("<START>")
 	actn_v.toidx("<END>")
+	#actn_v.toidx("@B")
+	actn_v.toidx("B0")
+	for i in range(args.B_l):
+		actn_v.toidx("B"+str(i+1))
+	#actn_v.toidx("@X")
 	for i in range(args.X_l):
 		actn_v.toidx("X"+str(i+1))
+	#actn_v.toidx("@E")
 	for i in range(args.E_l):
 		actn_v.toidx("E"+str(i+1))
+	#actn_v.toidx("@S")
 	for i in range(args.S_l):
 		actn_v.toidx("S"+str(i+1))
+	#actn_v.toidx("@T")
 	for i in range(args.T_l):
 		actn_v.toidx("T"+str(i+1))
 	for i in range(args.P_l):
 		actn_v.toidx("P"+str(i+1))
 	for i in range(args.K_l):
 		actn_v.toidx("K"+str(i+1))
-	for i in range(args.P_l):
-		actn_v.toidx("P"+str(i+1)+"(")
-	for i in range(args.K_l):
-		actn_v.toidx("K"+str(i+1)+"(")
+	actn_v.toidx("@P(")
+	#for i in range(args.P_l):
+		#actn_v.toidx("P"+str(i+1)+"(")
+	actn_v.toidx("@K(")
+	#for i in range(args.K_l):
+		#actn_v.toidx("K"+str(i+1)+"(")
 	actn_v.toidx("CARD_NUMBER")
 	actn_v.toidx("TIME_NUMBER")
 	actn_v.toidx(")")
@@ -448,7 +468,7 @@ def run_test(args):
 	actn_v.freeze()
 
 	test_input, test_sep = read_input(args.test_input)
-	test_comb = [ get_same_lemma(x) for x in zip(test_input,test_sep)]
+
 	extra_vl = [ vocabulary() for i in range(len(test_input[0])-1)]
 	for i in range(len(test_input[0])-1):
 		extra_vl[i].read_file(args.model_path_base+"/extra."+str(i+1)+".list")
@@ -473,7 +493,7 @@ def run_test(args):
 	assert encoder, "please specify encoder type"
 	
 	#check dict to get index
-	#BOX DISCOURSE RELATION PREDICATE CONSTANT
+	#BOX DISCOURSE RELATION PREDICATE SENSE
 	starts = []
 	ends = []
 	lines = []
@@ -491,7 +511,7 @@ def run_test(args):
 	#mask = Mask(args, actn_v, starts, ends)
 	cstn_step1 = struct_constraints(actn_v, args)
 	cstn_step2 = relation_constraints(actn_v, args, starts, ends)
-	cstn_step3 = variable_constraints(actn_v, args)
+	cstn_step3 = variable_constraints(actn_v, args, starts[-1], ends[-1])
 	decoder = dec(actn_v.size(), args, actn_v, [cstn_step1, cstn_step2, cstn_step3])
 
 	check_point = torch.load(args.model_path_base+"/model")
@@ -506,7 +526,7 @@ def run_test(args):
 	
 	test_instance, word_v, char_v, extra_vl = input2instance(test_input, word_v, char_v, pretrain, extra_vl, {}, args, "dev")
 	
-	test(args, args.test_output, test_instance, test_sep, test_comb, actn_v, input_representation, encoder, decoder)
+	test(args, args.test_output, test_instance, test_sep, actn_v, input_representation, encoder, decoder)
 	
 def run_check(args):
 

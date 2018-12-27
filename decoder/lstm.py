@@ -403,7 +403,6 @@ class decoder(nn.Module):
 				#print total_score
 				#print total_score.view(-1).data.tolist()
 				_, input_t = torch.max(total_score,1)
-
 				idx = input_t.view(-1).data.tolist()[0]
 				tokens.append(idx)
 				self.cstn2.update(idx, state)
@@ -573,9 +572,9 @@ class decoder(nn.Module):
 						List.append(self.copy(copy_rep_t[p][int(v[1:])].view(1, 1, -1)))
 					else:
 						v_t = torch.LongTensor([v])
-                                                if self.args.gpu:
-                                                        v_t = v_t.cuda()
-                                                List.append(self.embeds(v_t).unsqueeze(0))
+						if self.args.gpu:
+							v_t = v_t.cuda()
+						List.append(self.embeds(v_t).unsqueeze(0))
 
 
 				action_t = torch.cat(List, 0)
@@ -584,8 +583,8 @@ class decoder(nn.Module):
 				output, hidden = self.lstm(action_t, hidden)
 				outputs.append(output)
 				copy_scores_t = None
-                                if p != -1:
-                                        copy_scores_t = torch.bmm(self.copy_head(output).transpose(0,1), copy_rep_t[p].transpose(0,1).transpose(1,2)).view(output.size(0), -1)
+				if p != -1:
+					copy_scores_t = torch.bmm(self.copy_head(output).transpose(0,1), copy_rep_t[p].transpose(0,1).transpose(1,2)).view(output.size(0), -1)
 
 				#word-level attention
 				w_attn_scores_t = torch.bmm(self.word_head(output).transpose(0,1), word_rep_t.transpose(1,2))[0]
@@ -604,32 +603,37 @@ class decoder(nn.Module):
 
 				total_score = global_scores_t
 				if p != -1:
-                                        total_score = torch.cat((total_score, copy_scores_t), 1)
+					total_score = torch.cat((total_score, copy_scores_t), 1)
 
 				log_softmax_output_t = F.log_softmax(total_score, 1)
 				
 				g_List = []
-                                for i in range(len(var)):
-                                        if type(var[i]) == types.StringType:
-                                                g_List.append(int(var[i][1:]) + self.action_size)
-                                        else:
-                                                g_List.append(var[i])
+				for i in range(len(var)):
+					if type(var[i]) == types.StringType:
+						g_List.append(int(var[i][1:]) + self.action_size)
+					else:
+						g_List.append(var[i])
 
-                                action_g_t = torch.LongTensor(g_List)
-                                if self.args.gpu:
-                                        action_g_t = action_g_t.cuda()
-                                loss_t.append(self.criterion(log_softmax_output_t, action_g_t).view(1,-1))
+				action_g_t = torch.LongTensor(g_List)
+				if self.args.gpu:
+					action_g_t = action_g_t.cuda()
+				loss_t.append(self.criterion(log_softmax_output_t, action_g_t).view(1,-1))
 	
-                        loss_t = torch.sum(torch.cat(loss_t,0)) / len(loss_t)
+			loss_t = torch.sum(torch.cat(loss_t,0)) / len(loss_t)
 
 			return loss_t, torch.cat(outputs,0), hidden
 
 		elif self.args.beam_size == 1:
 			self.lstm.dropout = 0.0
 			tokens = []
+			input, p = input
 			action_t = self.rel2var(input).view(1, 1,-1)
 			while True:
 				output, hidden = self.lstm(action_t, hidden)
+
+				copy_scores_t = None
+				if p != -1:
+					copy_scores_t = torch.bmm(self.copy_head(output).transpose(0,1), copy_rep_t[p].transpose(0,1).transpose(1,2)).view(output.size(0), -1)
 
 				w_attn_scores_t = torch.bmm(self.word_head(output).transpose(0,1), word_rep_t.transpose(1,2))[0]
 				w_attn_weights_t = F.softmax(w_attn_scores_t, 1)
@@ -643,21 +647,21 @@ class decoder(nn.Module):
 				feat_hiddens_t = self.feat_tanh(self.feat(torch.cat((w_attn_hiddens_t, s_attn_hiddens_t, action_t.view(output.size(0),-1)), 1)))
 				global_scores_t = self.out(feat_hiddens_t)
 				#print "global_scores_t", global_scores_t
+				total_score = global_scores_t
+				if p != -1:
+					total_score = torch.cat((global_scores_t, copy_scores_t), 1)
 
-				score_t = global_scores_t
 				if self.args.const:
 					constraint = self.cstn3.get_step_mask(state)
 					constraint_t = torch.FloatTensor(constraint).unsqueeze(0)
 					if self.args.gpu:
 						constraint_t = constraint_t.cuda()
-					score_t = global_scores_t + (constraint_t - 1.0) * 1e10
+					total_score = total_score + (constraint_t - 1.0) * 1e10
 					
 				#print score
-				_, input_t = torch.max(score_t,1)
+				_, input_t = torch.max(total_score,1)
 				idx = input_t.view(-1).data.tolist()[0]
-
 				tokens.append(idx)
-
 				self.cstn3.update(idx, state)
 
 				if self.args.const:
@@ -666,13 +670,17 @@ class decoder(nn.Module):
 				else:
 					if self.cstn3.isterminal(state):
 						break
-					if len(tokens) >= 3:
+					if len(tokens) >= 5:
 						if self.args.soft_const:
 							tokens[-1] = self.actn_v.toidx(")")
 						break
-				action_t = self.embeds(input_t).view(1, 1, -1)
 
-			return tokens, None, hidden, [state.x, state.e, state.s, state.t]
+				if idx >= self.action_size:
+					action_t = self.copy(copy_rep_t[p][idx - self.action_size].view(1, 1, -1))
+				else:
+					action_t = self.embeds(input_t).view(1, 1, -1)
+
+			return tokens, None, hidden, [state.x, state.e, state.s, state.t, state.b]
 
 		else:
 			assert "no implementation"

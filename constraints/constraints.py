@@ -265,8 +265,8 @@ class relation_constraints:
 		RELATION = 2
 		PREDICATE = 3
 
-		re = self._get_zero(self.size + state.copy_length)
 		if state.cond == self.DRS:
+			re = self._get_zero(self.size + state.copy_length)
 			if state.rel == 0:
 				self._assign(re, self.starts[RELATION], self.ends[RELATION], 1)
 				self._assign(re, self.starts[PREDICATE], self.ends[PREDICATE], 1)
@@ -282,6 +282,7 @@ class relation_constraints:
 					self._assign(re, self.size, self.size+state.copy_length-1, 1)
 				self._assign(re, self.sep, self.sep, 1)
 		elif state.cond == self.SDRS:
+			re = self._get_zero(self.size)
 			if state.d_rel == 0:
 				self._assign(re, self.starts[DISCOURSE], self.ends[DISCOURSE], 1)
 			else:
@@ -322,14 +323,16 @@ class relation_constraints:
 class variable_constraints_state:
 	def __init__(self):
 		pass
-	def reset(self, p_max, b_max, length):
+	def reset(self, p_max, b_max):
 		self.p_max = p_max
 		self.x = 0
 		self.e = 0
 		self.s = 0
 		self.t = 0
 		self.b = b_max
+	def reset_length(self, length):
 		self.copy_length = length
+
 	def reset_condition(self, cond, k_scope=None):
 		self.cond = cond
 		self.k_scope = k_scope
@@ -373,8 +376,8 @@ class variable_constraints:
 		self.equ = actn_v.toidx("Equ(")
 		#self.CARD = actn_v.toidx("CARD_NUMBER")
 		#self.TIME = actn_v.toidx("TIME_NUMBER")
-		#self.CARD_b = actn_v.toidx("Card(")
-		#self.TIME_b = actn_v.toidx("Timex(")
+		self.CARD_b = actn_v.toidx("Card(")
+		self.TIME_b = actn_v.toidx("Timex(")
 
 		self.sense_s = sense_s
 		self.sense_e = sense_e
@@ -435,13 +438,16 @@ class variable_constraints:
 			if state.p_max >= 0:
 				self._assign(re, self.p_s, self.p_s + state.p_max, 1)
 		elif state.format == 2:
-			self._assign_all_v(re, state)
-			if state.p_max >= 0:
-				self._assign(re, self.p_s, self.p_s + state.p_max, 1)
-			self._assign(re, self.size, self.size+state.copy_length-1, 1)
-			self._assign(re, self.sense_s, self.sense_e, 1)
-			if state.rel != self.equ:
-				self._assign(re, state.prev_v, state.prev_v, 0)
+			if state.rel in [self.CARD_b, self.TIME_b]:
+				self._assign(re, self.size, self.size+state.copy_length-1, 1)
+			else:
+				self._assign_all_v(re, state)
+				if state.p_max >= 0:
+					self._assign(re, self.p_s, self.p_s + state.p_max, 1)
+				self._assign(re, self.size, self.size+state.copy_length-1, 1)
+				self._assign(re, self.sense_s, self.sense_e, 1)
+				if state.rel != self.equ:
+					self._assign(re, state.prev_v, state.prev_v, 0)
 		elif state.format == 3 or state.format == 5:
 			self._assign(re, self.sep, self.sep, 1)
 		elif state.format == 4:
@@ -451,7 +457,7 @@ class variable_constraints:
 			assert False, "unrecognized format"
 		return re
 	def get_sdrs_mask(self, state):
-		re = self._get_zero(self.size + state.copy_length)
+		re = self._get_zero(self.size)
 		if state.format == 6:
 			for k in state.k_scope:
 				self._assign(re, self.k_s + k, self.k_s + k, 1)
