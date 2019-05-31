@@ -12,7 +12,7 @@ Clone the codes on the branch DRTS
     git clone -b DRTS https://github.com/LeonCrashCode/TreeDRSparsing.git
     cd TreeDRSparsing/workspace/gd_sys1
     
-Download the dataset from ， move them to the folder data/; Download the pretrained vector from https://drive.google.com/open?id=1ICyISR-0PhuQYxIsqE5P7_r-OCsETIEU, move it to the folder embeddings
+Download the dataset from https://drive.google.com/open?id=1tuKOXIKdplDUM8EfFSZUc-WjeV7da9ZH， move them to the folder data/; Download the pretrained vector from https://drive.google.com/open?id=1ICyISR-0PhuQYxIsqE5P7_r-OCsETIEU, move it to the folder embeddings
 
     cd data
     data/trn.tree.align_drs
