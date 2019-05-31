@@ -1,0 +1,1 @@
+python main.py train --gpu --model-path-base models --pretrain-path embeddings/sskip.100.vectors --action-dict-path data/dict --train-input data/trn.tree.align_drs.oracle.doc.in --train-action data/trn.tree.align_drs.oracle.doc.out --check-per-update 100 --eval-per-update 5000 --optimizer adam
