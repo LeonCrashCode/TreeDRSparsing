@@ -12,7 +12,7 @@ Clone the codes on the branch DRTS
     git clone -b DRTS https://github.com/LeonCrashCode/TreeDRSparsing.git
     cd TreeDRSparsing/workspace/gd_sys1
     
-Download the dataset from https://drive.google.com/open?id=1tuKOXIKdplDUM8EfFSZUc-WjeV7da9ZH, move them to the folder data/; Download the pretrained vector from https://drive.google.com/open?id=1ICyISR-0PhuQYxIsqE5P7_r-OCsETIEU, move it to the folder embeddings
+Download the dataset from https://drive.google.com/open?id=1tuKOXIKdplDUM8EfFSZUc-WjeV7da9ZH, move them to the folder data/; Download the pretrained vector from https://drive.google.com/open?id=1ICyISR-0PhuQYxIsqE5P7_r-OCsETIEU, move it to the folder embeddings/ (ensure each line is a word representation).
 
     cd data
     data/trn.tree.align_drs
@@ -64,3 +64,12 @@ For each checkpoint, we need to see the F1 score on development dataset
     python D-match/d-match.py -f1 dev.tuple.align_drs.gold -f2 [checkpoint_index].tuple -pr -r 100 -p 10
     
 We choose the model with the highest F1 on develpment dataset as the final model, and trained model can be download from https://drive.google.com/open?id=1rzr4nd67tGHNo6T099e_FDxZkBVRFwbB.
+
+## Easy-use
+Download the pretrained model and move it to director workspace/gd_sys1
+
+    cd TreeDRSparsing/workspace/gd_sys1
+    tar -xvf models.tar
+    bash easy.sh sample
+
+
