@@ -54,7 +54,8 @@ For each checkpoint, we need to see the F1 score on development dataset
     ln -s ../../scripts/oracle2tree_drs.sh
     ln -s ../../scripts/drs2tuple.py
     ln -s ../../scripts/drs2tuple.sh
-    
+    ln -s ../../scripts/D-match
+ 
     python oracle2tree_drs.py dev.tree.align_drs.oracle.doc.in dev.tree.align_drs.oracle.doc.out > dev.tree.align_drs.gold
     python drs2tuple.py dev.tree.align_drs.gold > dev.tuple.align_drs.gold
     bash oracle2tree_drs.sh [start_checkpoint_index] [end_checkpint_index]
@@ -62,4 +63,4 @@ For each checkpoint, we need to see the F1 score on development dataset
     
     python D-match/d-match.py -f1 dev.tuple.align_drs.gold -f2 [checkpoint_index].tuple -pr -r 100 -p 10
     
-We choose the model with the highest F1 on develpment dataset as the final model, and trained model can be download from 
+We choose the model with the highest F1 on develpment dataset as the final model, and trained model can be download from https://drive.google.com/open?id=1rzr4nd67tGHNo6T099e_FDxZkBVRFwbB.
