@@ -1,0 +1,63 @@
+random-seed 123456789
+
+#word-dim 50
+word-dim 300
+char-dim 20
+char-hidden-dim 10
+char-n-layer 1
+pretrain-dim 100
+#extra-dim-list 50
+extra-dim-list 100
+
+input-dim 100
+
+# bilstm
+#bilstm-hidden-dim 150
+bilstm-hidden-dim 300
+bilstm-n-layer 2
+
+#action-dim 100
+action-dim 300
+#action-hidden-dim 150
+action-hidden-dim 600
+#action-n-layer 1
+action-n-layer 2
+action-feature-dim 150
+
+# optimizer
+learning-rate-f 0.0005
+learning-rate-decay-f 0
+weight-decay-f 1e-4
+dropout-f 0.2
+single-f 0.1
+
+# gmb sent
+# K-l 15
+# E-l 15
+# P-l 10
+# S-l 15
+# T-l 15
+# X-l 40
+
+# drs-l 20
+# rel-l 115
+# rel-g-l 125
+# d-rel-l 5
+# d-rel-g-l 15
+
+# for non-constraints
+max-struct-l 150
+
+# gmb doc
+K-l 35
+E-l 55
+P-l 25
+S-l 55
+T-l 45
+X-l 170
+
+drs-l 60
+rel-l 125
+rel-g-l 575
+d-rel-l 30
+d-rel-g-l 35
