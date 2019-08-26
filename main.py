@@ -583,7 +583,8 @@ class Demo:
 		self.cstn_step3 = variable_constraints(self.actn_v, args)
 		self.decoder = dec(self.actn_v.size(), self.args, self.actn_v, [self.cstn_step1, self.cstn_step2, self.cstn_step3])
 
-		check_point = torch.load(args.model_path_base+"/model")
+
+		check_point = torch.load(args.model_path_base+"/model", map_location=lambda storage, loc: storage)
 		self.encoder.load_state_dict(check_point["encoder"])
 		self.decoder.load_state_dict(check_point["decoder"])
 		self.input_representation.load_state_dict(check_point["input_representation"])
