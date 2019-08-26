@@ -4,7 +4,7 @@ The codes for the paper "Discourse Representation Parsing for Sentences and Docu
 ## The requirements
 
     python 2.7
-    pytorch > 0.4.1
+    pytorch 0.4.1
   
 ## Prepare
 Clone the codes on the branch DRTS
