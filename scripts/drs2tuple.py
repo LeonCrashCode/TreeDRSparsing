@@ -12,7 +12,7 @@ pp = re.compile("^P([0-9]+)$")
 kp = re.compile("^K([0-9]+)$")
 
 
-special = ["NOT(", "POS(", "NEC(", "OR(", "IMP(", "DUPLEX("]
+special = ["NOT(", "POS(", "NEC(", "OR(", "IMP(", "DUPLEX(", "DUP("]
 
 def is_variables(tok):
 	if xp.match(tok) or ep.match(tok) or sp.match(tok) or pp.match(tok) or kp.match(tok):
@@ -38,7 +38,7 @@ def process(tokens):
 		if tok == "<EOS>":
 			i += 1
 			pass
-		elif tok == "DRS(" or tok == "SDRS(":
+		elif tok == "DRS(" or tok == "SDRS(" or re.match("DRS-[0-9]+\(", tok):
 			stack.append("b"+str(current_b))
 			current_b += 1
 			i+= 1
@@ -126,5 +126,5 @@ def process(tokens):
 	print
 for line in open(sys.argv[1]):
 	line = line.strip()
-	if line[:5] == "SDRS(" or line[:4] == "DRS(":
+	if line[:5] == "SDRS(" or line[:4] == "DRS(" or re.match("DRS-[0-9]+\(", line[:4]):
 		process(line.split())
