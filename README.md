@@ -52,14 +52,14 @@ For each checkpoint, we need to see the F1 score on development dataset
     ln -s ../data/dev.tree.align_drs.oracle.doc.out
     ln -s ../../scripts/oracle2tree_drs.py
     ln -s ../../scripts/tree2tuple.py
-    ln -s ../../scripts/counter.py
+    ln -s ../../scripts/counter_gmb.py
  
     python oracle2tree_drs.py dev.tree.align_drs.oracle.doc.in dev.tree.align_drs.oracle.doc.out > dev.tree.align_drs.gold
     python tree2tuple.py --input dev.tree.align_drs.gold > dev.tuple.align_drs.gold
     python oracle2tree_drs.py dev.tree.align_drs.oracle.doc.in dev_output > dev.tree.align_drs.output
     python tree2tuple.py --input dev.tree.align_drs.output > dev.tuple.align_drs.output
     
-    python counter.py -f1 dev.tuple.align_drs.gold -f2 dev.tuple.align_drs.output -pr -r 100 -p 10
+    python counter_gmb.py -f1 dev.tuple.align_drs.gold -f2 dev.tuple.align_drs.output -pr -r 100 -p 10
     
 We choose the model with the highest F1 on develpment dataset as the final model, and trained model can be download from https://drive.google.com/open?id=1rzr4nd67tGHNo6T099e_FDxZkBVRFwbB.
 
