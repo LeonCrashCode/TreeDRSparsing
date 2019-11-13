@@ -42,6 +42,7 @@ def out_tree(lemmas, trees):
 		while j < len(trees[i]):
 			if re.match("^DRS-[0-9]+\($", trees[i][j]):
 				cur = int(trees[i][j][4:-1])
+				tree[i][j] = "DRS("
 				assert cur < len(lemmas[i])
 			elif re.match("^\$[0-9]+\(",trees[i][j]):
 				idx = int(trees[i][j][1:-1])
