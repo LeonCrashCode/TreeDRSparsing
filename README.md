@@ -51,17 +51,15 @@ For each checkpoint, we need to see the F1 score on development dataset
     ln -s ../data/dev.tree.align_drs.oracle.doc.in
     ln -s ../data/dev.tree.align_drs.oracle.doc.out
     ln -s ../../scripts/oracle2tree_drs.py
-    ln -s ../../scripts/oracle2tree_drs.sh
-    ln -s ../../scripts/drs2tuple.py
-    ln -s ../../scripts/drs2tuple.sh
-    ln -s ../../scripts/D-match
+    ln -s ../../scripts/tree2tuple.py
+    ln -s ../../scripts/counter.py
  
     python oracle2tree_drs.py dev.tree.align_drs.oracle.doc.in dev.tree.align_drs.oracle.doc.out > dev.tree.align_drs.gold
-    python drs2tuple.py dev.tree.align_drs.gold > dev.tuple.align_drs.gold
-    bash oracle2tree_drs.sh [start_checkpoint_index] [end_checkpint_index]
-    bash drs2tuple.sh [start_checkpoint_index] [end_checkpint_index]
+    python tree2tuple.py --input dev.tree.align_drs.gold > dev.tuple.align_drs.gold
+    python oracle2tree_drs.py dev.tree.align_drs.oracle.doc.in dev_output > dev.tree.align_drs.output
+    python tree2tuple.py --input dev.tree.align_drs.output > dev.tuple.align_drs.output
     
-    python D-match/d-match.py -f1 dev.tuple.align_drs.gold -f2 [checkpoint_index].tuple -pr -r 100 -p 10
+    python counter.py -f1 dev.tuple.align_drs.gold -f2 dev.tuple.align_drs.output -pr -r 100 -p 10
     
 We choose the model with the highest F1 on develpment dataset as the final model, and trained model can be download from https://drive.google.com/open?id=1rzr4nd67tGHNo6T099e_FDxZkBVRFwbB.
 
